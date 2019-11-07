@@ -19,7 +19,9 @@ Roll20 API for Automatically Wild Shaping using the Roll20 D&amp;D 5th Edition O
 
 1) Make sure the beast has a <b>player-uploaded</b> default token.
 2) Make sure you're using a filled out Roll20 D&D 5e Character Sheet.
-3) ??? - If its not working with a default SRD monster sheet & blank <b>player-uploaded</b> default token then something has gone wrong. Hit me up in the API thread or at the link below.
+3) ???
+
+If its not working with a default SRD monster sheet & blank <b>player-uploaded</b> default token then something has gone wrong. Hit me up in the API thread or at the link below.
 
 -----
 
