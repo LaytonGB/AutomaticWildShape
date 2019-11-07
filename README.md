@@ -28,6 +28,7 @@ Roll20 API for Automatically Wild Shaping using the Roll20 D&amp;D 5th Edition O
 1) Create an attribute on the NPC or PC sheet.
 2) Name the attribute "aws_override".
 3) Set the attribute value to "1".
+
 If a PC is using the "aws_override" attribute the GM will be notified.
 
 -----
