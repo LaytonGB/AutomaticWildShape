@@ -15,6 +15,19 @@ Roll20 API for Automatically Wild Shaping using the Roll20 D&amp;D 5th Edition O
 
 -----
 
+<h3>Commands</h3>
+
+All required commands are created in macros automatically when the API is installed. One command "!aws revert" is an Ability created on any creature in wild shape. These are the macros and abilities:
+
+1) AutomaticWildShape - This command is for transforming the selected token. It produces a list of appropriate CR beasts in chat that the user can click to transform.
+2) "!aws revert" - A creature in wild shape has this Ability. When their token is selected, check the top-left of the screen for this button. Clicking it reverts the creature to their normal form.
+3) AWSadd - Adds the selected token(s) to the wild shape list if they each represent a character.
+4) AWSremove - Removes the selected token(s) from the wild shape list if they each represent a character.
+5) AWSlist - Lists all creatures in the wild shape list, and allows the GM to remove creatures from that list by clicking the appropriate X button.
+6) AWSpopulate - Automatically populates the wild shape list, adding every Beast type NPC sheet that has a default token.
+
+-----
+
 <h3>Beast WildShape Preperation</h3>
 
 1) Make sure the beast has a <b>player-uploaded</b> default token.
