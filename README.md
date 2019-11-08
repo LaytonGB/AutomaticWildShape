@@ -30,7 +30,7 @@ A creature in wild shape has this Ability. When their token is selected, check t
 #### AWSadd - `!aws add`
 Adds the selected token(s) to the wild shape list if they each represent a character.
 
-#### AWSremove - `!aws add` / `!aws add <beast name>`
+#### AWSremove - `!aws remove` / `!aws remove <beast name>`
 Removes the selected token(s) from the wild shape list if they each represent a character, or removes beasts from the list by name if all capitals and spelling are correct.
 
 #### AWSlist - `!aws list`
@@ -45,9 +45,8 @@ Automatically populates the wild shape list, adding every Beast type NPC sheet t
 
 1) Make sure the beast has a <b>player-uploaded</b> default token.
 2) Make sure you're using a filled out Roll20 D&D 5e Character Sheet.
-3) ???
 
-If its not working with a default SRD monster sheet & blank <b>player-uploaded</b> default token then something has gone wrong. Hit me up in the API thread or at the link below.
+If its not working with a default SRD monster sheet & blank <b>player-uploaded</b> default token then something has gone wrong. Hit me up in the API thread or at the link below. If you're sure the issue isn't something you're doing, open an issue on this GitHub Repository.
 
 -----
 
