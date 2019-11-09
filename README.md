@@ -3,6 +3,15 @@ Roll20 API for Automatically Wild Shaping using the Roll20 D&amp;D 5th Edition O
 
 -----
 
+## Why This API?
+I am a dedicated 5th Edition D&D player and GM. As such I wanted to craft the perfect tool for Wild Shape, one that required minimum effort from the user.
+
+This API automatically populates its options with Beasts from the Journal. When you transform using this API, it creates you a unique sheet that follows all the D&D rules (as per [D&D Beyond's Basic Rules](https://www.dndbeyond.com/sources/basic-rules/classes#WildShape)) thereby allowing players to take both their own skill proficiencies, and those of the beast form. When you choose to revert from Wild Shape, the sheet that was created for you is deleted. 
+
+This system allows every beast to only be added once, and then every Druid or NPC can use the API to take that beast's form. The beast sheets are not affected by the API, and so they can still be used by the GM as NPCs or Monsters.
+
+-----
+
 ## Installation
 
 1) **You must have a Roll20 Pro subscription to use the Roll20 API.**
@@ -43,10 +52,10 @@ Automatically populates the wild shape list, adding every Beast type NPC sheet t
 
 ## Beast WildShape Preperation
 
-1) Make sure the beast has a <b>player-uploaded</b> default token.
+1) Make sure the beast has a **player-uploaded** default token.
 2) Make sure you're using a filled out Roll20 D&D 5e Character Sheet.
 
-If its not working with a default SRD monster sheet & blank <b>player-uploaded</b> default token then something has gone wrong. Hit me up in the API thread or at the link below. If you're sure the issue isn't something you're doing, open an issue on this GitHub Repository.
+If its not working with a default SRD monster sheet & blank **player-uploaded** default token then something has gone wrong. Hit me up in the API thread or at the link below. If you're sure the issue isn't something you're doing, open an issue on this GitHub Repository.
 
 -----
 
