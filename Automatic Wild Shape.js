@@ -131,7 +131,9 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
             playerID = msg.playerid;
             if (msg.type === 'api' && msg.content.split(' ')[0] === `!${apiCall}`) {
                 var parts = msg.content.split(' ');
-                if (!['hello'].includes(parts[1]))
+                if (!['hello'].includes(parts[1])) {
+                    
+                }
             }
         },
 
