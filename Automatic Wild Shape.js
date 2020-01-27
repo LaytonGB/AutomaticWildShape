@@ -356,6 +356,11 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
 
         getSheetsFromSelected = function (objs) {
             let tokens = _.map(objs, obj => { getObj('graphic', obj._id) }),
+                tokens = _.filter(tokens, token => { 
+                    let keep = token.get('represents') != undefined;
+                    if (!keep) { error(`Beast '${token.get('name')}' did not represent a sheet, and so could not be added to the Wild Shape list.`, 9) }
+                    return keep; 
+                }),
                 sheets = _.map(tokens, token => { getObj('character', token.get('represents')) });
             return sheets;
         },
