@@ -213,6 +213,9 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
                     beast = getObj('character', beastID);
                 if (beast) {
                     let crLimit = getPlayerFilter();
+                    if (crLimit) {
+                        // transform if beast cr is within player cr
+                    }
                 } else {
                     error(`No beast named '${beastID}' found in the Journal.`, 3);
                     return;
@@ -319,7 +322,7 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
                     if (playerIsGM(playerID)) {
                         return 99;
                     } else {
-                        error(`NPCs can only wild shape if they have the attribute 'aws_override' set to '1'.`, 7);
+                        error(`NPCs can only wild shape if the GM runs the command or if they have the attribute 'aws_override' set to '1'.`, 7);
                         return;
                     }
                 } else {
