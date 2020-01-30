@@ -113,9 +113,9 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
                     defaultValue = value[2] != undefined ? value[2] : true,
                     currentValue = `${getState(value[0])}`,
                     stringVals = valuesToString(acceptableValues, defaultValue);
-                    if (!Array.isArray(value[2])) {
-                        output += `{{${value[0]}=[${currentValue}](${apiCall} config ${value[0]} ?{New ${value[0]} value${stringVals}})}}`;
-                    }
+                if (!Array.isArray(value[2])) {
+                    output += `{{${value[0]}=[${currentValue}](${apiCall} config ${value[0]} ?{New ${value[0]} value${stringVals}})}}`;
+                }
             })
             toPlayer(output);
             return;
@@ -142,7 +142,7 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
             return;
         },
 
-        resetConfig = function() {
+        resetConfig = function () {
             _.each(states, value => {
                 let defaultValue = (value[2] != undefined) ? value[2] : true;
                 state[`${stateName}_${value[0]}`] = defaultValue;
@@ -200,21 +200,21 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
             char = getObj('character', charID);
 
             if (!token) { error(`Either no token was selected or the selected token was not a graphic.`, 1); return; }
-            else if (!charID || !char) { error(`Character ID was invalid.`, 2); return; }
+            else if (!charID || !char) { error(`Character ID ${code(charID)} was invalid.`, 2); return; }
 
             if (getAttrByName(charID, 'aws_override') == 1 && getAttrByName(charID, 'npc') != 1) {
                 toChat(`**PLAYER IS USING AWS OVERRIDE**`, false, 'gm');
             }
 
             if (!parts[1]) {
-
+                // post list of possible creatures
             } else {
-                let beastName = msg.content.replace(parts[0], '').trim(),
-                    beast = findObjs({ _type: 'character', name: beastName })[0];
+                let beastID = msg.content.replace(parts[0], '').trim(),
+                    beast = getObj('character', beastID);
                 if (beast) {
                     let crLimit = getPlayerFilter();
                 } else {
-                    error(`No beast named '${beastName}' found in the Journal.`, 3);
+                    error(`No beast named '${beastID}' found in the Journal.`, 3);
                     return;
                 }
             }
@@ -362,10 +362,10 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
 
         getSheetsFromSelected = function (objs) {
             let tokens = _.map(objs, obj => { getObj('graphic', obj._id) }),
-                tokens = _.filter(tokens, token => { 
+                tokens = _.filter(tokens, token => {
                     let keep = token.get('represents') != undefined;
                     if (!keep) { error(`Beast '${token.get('name')}' did not represent a sheet, and so could not be added to the Wild Shape list.`, 9) }
-                    return keep; 
+                    return keep;
                 }),
                 sheets = _.map(tokens, token => { getObj('character', token.get('represents')) });
             return sheets;
