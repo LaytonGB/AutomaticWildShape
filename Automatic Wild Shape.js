@@ -42,6 +42,10 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
                         `${apiCall} populate`
                     ],
                     [
+                        'AWShelp',
+                        `${apiCall} help`
+                    ],
+                    [
                         'AWSreset',
                         `${apiCall} RESET ?{Are you sure? This will reset all settings and empty the Wild Shape list|No|Yes}`
                     ]
@@ -140,7 +144,7 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
 
         resetConfig = function() {
             _.each(states, value => {
-                let defaultValue = value[2] != undefined ? value[2] : true;
+                let defaultValue = (value[2] != undefined) ? value[2] : true;
                 state[`${stateName}_${value[0]}`] = defaultValue;
             })
             toChat(`All settings restored to default, and Wild Shape list emptied.`, true);
@@ -152,7 +156,9 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
             playerID = msg.playerid;
             parts = msg.content.split(' ');
             if (msg.type === 'api' && parts[0] === `${apiCall}`) {
-                if (!['add', 'remove', 'list', 'populate'].includes(parts[1])) {
+                if (!parts[1]) {
+                    wildShape(msg);
+                } else if (!['help', 'add', 'remove', 'list', 'populate', 'config', 'RESET'].includes(parts[1])) {
                     wildShape(msg);
                 } else {
                     switch (parts[1]) {
@@ -180,7 +186,7 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
                             else { error(`Only GMs can reset the API settings.`, -2) }
                             break;
                         default:
-                            error(`Command not understood:<br>'${msg.content}'`, 0);
+                            error(`Command not understood:<br>${code(msg.content)}`, 0);
                             break;
                     }
                     return;
@@ -428,7 +434,7 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
 }())
 
 on('ready', function () {
-    APIName.CheckMacros();
-    APIName.StartupChecks();
-    APIName.RegisterEventHandlers();
+    AutomaticWildShape.CheckMacros();
+    AutomaticWildShape.StartupChecks();
+    AutomaticWildShape.RegisterEventHandlers();
 })
