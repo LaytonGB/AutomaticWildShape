@@ -69,4 +69,4 @@ If a PC is using the "aws_override" attribute the GM will be notified.
 
 -----
 
-Automatic Wild Shape written by Layton - https://app.roll20.net/users/1519557/layton
+Automatic Wild Shape written by Layton - https://github.com/LaytonGB/
