@@ -156,14 +156,15 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
             playerID = msg.playerid;
             parts = msg.content.split(' ');
             if (msg.type === 'api' && parts[0] === `${apiCall}`) {
-                if (!parts[1]) {
-                    wildShape(msg);
-                } else if (!['help', 'add', 'remove', 'list', 'populate', 'config', 'RESET'].includes(parts[1])) {
+                if (!parts[1] || !['help', 'revert', 'add', 'remove', 'list', 'populate', 'config', 'RESET'].includes(parts[1])) {
                     wildShape(msg);
                 } else {
                     switch (parts[1]) {
                         case 'help':
                             showHelp();
+                            break;
+                        case 'revert':
+                            revertToken();
                             break;
                         case 'add':
                             listAdd(msg.selected);
@@ -207,20 +208,68 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
             }
 
             if (!parts[1]) {
-                // post list of possible creatures
+                let crLimit = getPlayerFilter(),
+                    beastList = _.filter(getState('beastList'), beast => {
+                        return beast.filter <= crLimit;
+                    }),
+                    chatOutput = `&{template:default} {{name=${token.get('name')}'s Wild Shapes}}`;
+                if (beastList.length > 0) {
+                    let i = 0,
+                        cr;
+                    _.each(beastList, beast => {
+                        if (cr != beast.cr) {
+                            cr = beast.cr;
+                            chatOutput += ` {{CR${cr} Creatures}}`;
+                        }
+                        if (i % 2 == 0) {
+                            chatOutput += ` {{[${beast.name}](!aws ${beast.id}) `;
+                        } else {
+                            chatOutput += `= [${beast.name}](!aws ${beast.id})}}`;
+                        }
+                        i++;
+                    })
+                    if (i % 2 == 0) {
+                        chatOutput += `}}`;
+                    }
+                    toChat(chatOutput, undefined, playerName);
+                } else {
+                    error(`No creatures present in available Wild Shapes.`, 9);
+                }
             } else {
                 let beastID = msg.content.replace(parts[0], '').trim(),
                     beast = getObj('character', beastID);
                 if (beast) {
-                    let crLimit = getPlayerFilter();
-                    if (crLimit) {
-                        // transform if beast cr is within player cr
+                    let crLimit = getPlayerFilter(),
+                        listBeast = getState('beastList').find(beast => beast.id == beastID);
+                    if (crLimit && listBeast) {
+                        if (listBeast.filter <= crLimit) {
+                            transformToken();
+                        } else {
+                            let cr = crLimit == .2 ? '1/4' : crLimit == .5 ? '1/2' : crLimit;
+                            error(`Sorry, but the CR of a '${beast.name}' is too high for ${token.get('name')} to transform into.<br>Pick a creature of CR ${cr} or lower.`)
+                        }
                     }
                 } else {
                     error(`No beast named '${beastID}' found in the Journal.`, 3);
                     return;
                 }
             }
+        },
+        
+        transformToken = function () {
+            // create beast sheet
+            // bring over player sheets proficiencies and mental stats
+            // add revert macro
+            // create beast token
+            // store old token JSON string in new beast sheet
+            // delete old token
+        },
+        
+        revertToken = function () {
+            // get original token from beast sheet
+            // create original token
+            // carry over damage
+            // delete beast token and sheet
         },
 
         listAdd = function (objs) {
@@ -331,7 +380,7 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
                 }
             }
             // categorise filter by level
-            if (moonDruid) {
+            if (!moonDruid) {
                 filter = +druidLevel >= 8 ? 1 : +druidLevel >= 4 ? .5 : +druidLevel >= 2 ? .2 : undefined;
             } else {
                 filter = +druidLevel >= 6 ? Math.floor(+druidLevel / 3) : +druidLevel >= 2 ? 1 : undefined;
