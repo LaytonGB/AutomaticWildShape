@@ -255,24 +255,33 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
                 }
             }
         },
-        
+
         transformToken = function (beastOld) {
+            // make checks
+            beastOld.get('_defaulttoken', o => {
+                if (o == 'null') { error(`'${beastOld.get('name')}' does not have a default token. Wild Shape cancelled.`, 11); return; }
+            });
+            if (findObjs({ _type: 'attribute', _characterid: beastOld.id, name: 'source_token' })[0]) {
+                error(`That beast is already in Wild Shape, detected because character attribute ${code('source_token')} already has a value.`, 12);
+                return;
+            }
+
             // create beast sheet
-            beastOldAttrs = findObjs({ _type: 'attribute', _characterid: beastOld.id });
-            beastNew = createObj('character', { name: `${token.get('name')} as ${beastOld.get('name')}`, avatar: beastOld.get('avatar') });
+            let beastOldAttrs = findObjs({ _type: 'attribute', _characterid: beastOld.id }),
+                beastNew = createObj('character', { name: `${token.get('name')} as ${beastOld.get('name')}`, avatar: beastOld.get('avatar') });
+
             // add beast attrs
             _.each(beastOldAttrs, attr => {
-                if (attr.get('name') != 'ws') {
-                    let attr = createObj('attribute', {
-                        _characterid: beastNew.id,
-                        name: attr.get('name')
-                    })
-                    attr.setWithWorker({
-                        current: attr.get('current'),
-                        max: attr.get('max')
-                    })
-                }
+                let attr = createObj('attribute', {
+                    _characterid: beastNew.id,
+                    name: attr.get('name')
+                })
+                attr.setWithWorker({
+                    current: attr.get('current'),
+                    max: attr.get('max')
+                })
             });
+
             // add revert macro
             createObj('ability', {
                 _characterid: beastNew.id,
@@ -280,31 +289,101 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
                 action: `!aws end`,
                 istokenaction: true
             });
+
             // add player control
             beastNew.set('controlledby', char.get('controlledby'));
+
             // bring over player sheets proficiencies and mental stats
             let mentalAttrs = ['intelligence', 'wisdom', 'charisma'],
-                skills = [
-                    'strength_save', 'dexterity_save', 'constitution_save', 'intelligence_save', 'wisdom_save', 'charisma_save', 'athletics', 'acrobatics', 'sleight_of_hand', 
-                    'stealth', 'arcana', 'history', 'investigation', 'nature', 'religion', 'animal_handling', 'insight', 'medicine', 'perception', 'survival', 
-                    'deception', 'intimidation', 'performance', 'persuasion'
-                ];
-            _.each(mentalAttrs, attrName => {
+                skills = {
+                    skills: [
+                        'strength_save', 'dexterity_save', 'constitution_save', 'intelligence_save', 'wisdom_save', 'charisma_save', 'athletics', 'acrobatics', 'sleight_of_hand', 'stealth', 'arcana', 'history', 'investigation', 'nature', 'religion', 'animal_handling', 'insight', 'medicine', 'perception', 'survival', 'deception', 'intimidation', 'performance', 'persuasion'
+                    ],
+                    saves: [],
+                    str: ['strength_save', 'athletics'],
+                    dex: ['dexterity_save', 'acrobatics', 'sleight_of_hand', 'stealth'],
+                    con: ['constitution_save'],
+                    int: ['intelligence_save', 'arcana', 'history', 'investigation', 'nature', 'religion'],
+                    wis: ['wisdom_save', 'animal_handling', 'insight', 'medicine', 'perception', 'survival'],
+                    cha: ['charisma_save', 'deception', 'intimidation', 'performance', 'persuasion'],
+                    findAbility: function (skill) {
+                        if (skills.str.includes(skill)) {
+                            return 'strength_mod';
+                        } else if (skills.dex.includes(skill)) {
+                            return 'dexterity_mod';
+                        } else if (skills.con.includes(skill)) {
+                            return 'constitution_mod';
+                        } else if (skills.int.includes(skill)) {
+                            return 'intelligence_mod';
+                        } else if (skills.wis.includes(skill)) {
+                            return 'wisdom_mod';
+                        } else if (skills.cha.includes(skill)) {
+                            return 'charisma_mod';
+                        } else {
+                            error(`Skill '${skill}' was not related to any ability score.`, 11);
+                            return;
+                        }
+                    }
+                };
+
+            _.each(mentalAttrs, attrName => { // set ability scores
                 let beastAttr = findObjs('attribute', { _characterid: beastNew.id, name: attrName })[0];
                 beastAttr.setWithWorker({ current: getAttrByName(charID, attrName, 'current'), max: getAttrByName(charID, getAttrByName(charID, attrName, 'max')) });
             });
-            let skillsProfs = _.filter(skills, skill => {
+
+            let skillsProfs = _.filter(skills.skills, skill => { // reduce skill list to only skills PC is proficient in
                 return getAttrByName(charID, skill + '_prof') == 1;
             });
-            _.each(skillsProfs, skill => {
-                let attr = findObjs('attribute', { _characterid: charID, name: skill })[0];
-                if (!attr) { attr = createObj('attribute', { _characterid: charID, name: skill }) };
-            })
-            // create beast token
+
+            _.each(skillsProfs, skill => { // for each skill or save proficiency that the PC has, set the skill to the highest of the PC or Beast bonuses
+                // store IDs, attribute names, and search for bonuses
+                let ability = skills.findAbility(skill), // the relevant ability score for this skill
+                    attrsChar = {
+                        id: charID,
+                        name: skill,
+                        bonus: getAttrByName(charID, 'pb') ? getAttrByName(charID, 'pb') : getAttrByName(charID, 'npc') == 1 ? (+getAttrByName(charID, 'npc_challenge') / 4) + 2 : 2
+                    },
+                    attrsBeast = {
+                        id: beastNew.id,
+                        name: 'npc_' + skill + '_bonus',
+                        abilityMod: getAttrByName(attrsBeast.id, ability)
+                    };
+                // Change saving throws to npc styled saving throws ('dexterity_save' => 'dex_save')
+                if (skill.contains('_save')) {
+                    attrsBeast.name = npcSave(skill);
+                    attrsBeast.attr = findObjs('attribute', { _characterid: beastNew.id, name: attrsBeast.name })[0];
+                } else {
+                    attrsBeast.attr = findObjs('attribute', { _characterid: beastNew.id, name: attrsBeast.name })[0];
+                }
+                // for beast only, see if an attribute was found. if not, create it and set to 0.
+                if (!attrsBeast.attr) {
+                    attrsBeast.attr = createObj('attribute', { _characterid: attrsBeast.id, name: attrsBeast.name });
+                    attrsBeast.attr.setWithWorker({ current: 0 });
+                }
+                // get beast proficiency bonus for this skill
+                attrsBeast.bonus = +attrsBeast.attr.get('current') - +getAttrByName(attrsBeast.id, ability);
+                // if the beast bonus is smaller than the player bonus, use the player bonus
+                if (+attrsBeast.bonus < +attrsChar.bonus) {
+                    attrsBeast.attr.setWithWorker({ current: +attrsChar.bonus + +attrsBeast.abilityMod });
+                }
+            });
+            function npcSave(attr) { // Change saving throws to npc styled saving throws ('dexterity_save' => 'dex_save')
+                attr = attr.replace('ength', '');
+                attr = attr.replace('terity', '');
+                attr = attr.replace('stitution', '');
+                attr = attr.replace('elligence', '');
+                attr = attr.replace('dom', '');
+                attr = attr.replace('risma', '');
+                return attr;
+            }
+
             // store old token JSON string in new beast sheet
+            createObj('attribute', { _characterid: beastNew.id, name: 'source_token',  })
+            // create beast token
+            // randomise health?
             // delete old token
         },
-        
+
         revertToken = function () {
             // get original token from beast sheet
             // create original token
@@ -352,13 +431,15 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
             _.each(findObjs({ _type: 'character' }), sheet => {
                 let type = getAttrByName(sheet.id, 'npc_type');
                 if (type.toLowerCase().includes('beast') && getState('beastList').includes(sheet.id)) {
-                    sheet.get('_defaulttoken', obj => {
-                        if (obj != 'null') {
-                            listAddSheet(sheet);
-                        } else {
-                            error(`Could not add '${sheet.get('name')}' to Wild Shape list because there was no default token.`, 4);
-                        }
-                    })
+                    if (!findObjs({ _type: 'attribute', _characterid: beastOld.id, name: 'source_token' })[0]) {
+                        sheet.get('_defaulttoken', o => {
+                            if (o != 'null' && findObjs()) {
+                                listAddSheet(sheet);
+                            } else {
+                                error(`Could not add '${sheet.get('name')}' to Wild Shape list because there was no default token.`, 4);
+                            }
+                        })
+                    }
                 }
             })
         },
@@ -456,7 +537,7 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
             let tokens = _.map(objs, obj => { getObj('graphic', obj._id) }),
                 tokens = _.filter(tokens, token => {
                     let keep = token.get('represents') != undefined;
-                    if (!keep) { error(`Beast '${token.get('name')}' did not represent a sheet, and so could not be added to the Wild Shape list.`, 9) }
+                    if (!keep) { error(`Beast '${token.get('name')}' did not represent a sheet, and so could not be added to the Wild Shape list.`, 10) }
                     return keep;
                 }),
                 sheets = _.map(tokens, token => { getObj('character', token.get('represents')) });
