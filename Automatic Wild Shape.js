@@ -3,7 +3,8 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
         states = [
             ['beastList', 'any', []],
             ['notifyGM'],
-            ['hpBar', [1, 2, 3], 3]
+            ['hpBar', [1, 2, 3], 3],
+            ['roll_shape_hp', [false, true], false]
         ],
         name = 'AWS',
         nameError = name + ' ERROR',
@@ -265,6 +266,10 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
                 error(`That beast is already in Wild Shape, detected because character attribute ${code('source_token')} already has a value.`, 12);
                 return;
             }
+            if (getState('hpBar') > 3 || getState('hpBar') < 1) {
+                error(`The HP bar setting has been set outside of its parameters. To reset, run the command ${code('!aws RESET yes')}. Wild Shape cancelled.`, 12);
+                return;
+            }
 
             // create beast sheet
             let beastOldAttrs = findObjs({ _type: 'attribute', _characterid: beastOld.id }),
@@ -307,18 +312,19 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
                     wis: ['wisdom_save', 'animal_handling', 'insight', 'medicine', 'perception', 'survival'],
                     cha: ['charisma_save', 'deception', 'intimidation', 'performance', 'persuasion'],
                     findAbility: function (skill) {
+                        let end = '_mod';
                         if (skills.str.includes(skill)) {
-                            return 'strength_mod';
+                            return 'strength' + end;
                         } else if (skills.dex.includes(skill)) {
-                            return 'dexterity_mod';
+                            return 'dexterity' + end;
                         } else if (skills.con.includes(skill)) {
-                            return 'constitution_mod';
+                            return 'constitution' + end;
                         } else if (skills.int.includes(skill)) {
-                            return 'intelligence_mod';
+                            return 'intelligence' + end;
                         } else if (skills.wis.includes(skill)) {
-                            return 'wisdom_mod';
+                            return 'wisdom' + end;
                         } else if (skills.cha.includes(skill)) {
-                            return 'charisma_mod';
+                            return 'charisma' + end;
                         } else {
                             error(`Skill '${skill}' was not related to any ability score.`, 11);
                             return;
@@ -339,8 +345,6 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
                 // store IDs, attribute names, and search for bonuses
                 let ability = skills.findAbility(skill), // the relevant ability score for this skill
                     attrsChar = {
-                        id: charID,
-                        name: skill,
                         bonus: getAttrByName(charID, 'pb') ? getAttrByName(charID, 'pb') : getAttrByName(charID, 'npc') == 1 ? (+getAttrByName(charID, 'npc_challenge') / 4) + 2 : 2
                     },
                     attrsBeast = {
@@ -376,12 +380,71 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
                 attr = attr.replace('risma', '');
                 return attr;
             }
+            
+            // randomise and/or refill hp
+            let beastNewHP = findObjs({ _type: 'attribute', _characterid: beastNew.id, name: 'hp' })[0];
+            if (getState('roll_shape_hp') && beastNew.get('npc_hpformula')) {
+                let rolledHP = roll(beastNew.get('npc_hpformula'));
+                beastNewHP.setWithWorker({ max: rolledHP, current: rolledHP });
+            } else {
+                beastNewHP.setWithWorker({ max: beastNewHP.get('max'), current: beastNewHP.get('max') });
+            }
 
             // store old token JSON string in new beast sheet
-            createObj('attribute', { _characterid: beastNew.id, name: 'source_token',  })
+            createObj('attribute', { _characterid: beastNew.id, name: 'source_token', current: JSON.stringify(token) })
+
             // create beast token
-            // randomise health?
-            // delete old token
+            beastOld.get('_defaulttoken', o => {
+                let obj = JSON.parse(o);
+                obj = Object.assign(obj, {
+                    _pageid: token.get('_pageid'),
+                    layer: token.get('layer'),
+                    name: token.get('name'),
+                    left: token.get('left'),
+                    top: token.get('top'),
+                    represents: beastNew.id
+                });
+                // token hp
+                obj[`bar${getState('hpBar')}_max`] = getAttrByName(beastNew, 'hp', 'max');
+                obj[`bar${getState('hpBar')}_value`] = obj[`bar${getState('hpBar')}_max`];
+                // token size
+                switch (true) {
+                    case getAttrByName(beastNew, 'npc_type').search(/tiny/i) != -1:
+                        setSize(0.5);
+                        break;
+                    case getAttrByName(beastNew, 'npc_type').search(/large/i) != -1:
+                        setSize(2);
+                        break;
+                    case getAttrByName(beastNew, 'npc_type').search(/huge/i) != -1:
+                        setSize(3);
+                        break;
+                }
+                function setSize(size) {
+                    obj.width = token.get('width') * size;
+                    obj.height = token.get('height') * size;
+                }
+            });
+            //img setup
+            let img = obj.imgsrc;
+            img = img.replace("max.", "thumb.");
+            img = img.replace("med.", "thumb.");
+            img = img.replace("min.", "thumb.");
+            obj.imgsrc = img;
+
+            // place new token and delete old token
+            let beastNewToken = createObj('graphic', obj);
+            if (beastNewToken == undefined) {
+                error(`Tokens must be player-uploaded for the Auto Wild Shape API to work.`, 13);
+                // remove the created sheet that is now unused
+                toChat(`API cleaned up character sheets left over after errors.`, false);
+                beastNew.remove();
+                return;
+            } else {
+                toFront(beastNewToken);
+                setDefaultTokenForCharacter(beastNew, beastNewToken);
+                // delete old token
+                token.remove();
+            }
         },
 
         revertToken = function () {
@@ -433,7 +496,7 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
                 if (type.toLowerCase().includes('beast') && getState('beastList').includes(sheet.id)) {
                     if (!findObjs({ _type: 'attribute', _characterid: beastOld.id, name: 'source_token' })[0]) {
                         sheet.get('_defaulttoken', o => {
-                            if (o != 'null' && findObjs()) {
+                            if (o != 'null') {
                                 listAddSheet(sheet);
                             } else {
                                 error(`Could not add '${sheet.get('name')}' to Wild Shape list because there was no default token.`, 4);
