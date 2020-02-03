@@ -243,7 +243,7 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
                         listBeast = getState('beastList').find(beast => beast.id == beastID);
                     if (crLimit && listBeast) {
                         if (listBeast.filter <= crLimit) {
-                            transformToken();
+                            transformToken(beast);
                         } else {
                             let cr = crLimit == .2 ? '1/4' : crLimit == .5 ? '1/2' : crLimit;
                             error(`Sorry, but the CR of a '${beast.name}' is too high for ${token.get('name')} to transform into.<br>Pick a creature of CR ${cr} or lower.`)
@@ -256,10 +256,50 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
             }
         },
         
-        transformToken = function () {
+        transformToken = function (beastOld) {
             // create beast sheet
-            // bring over player sheets proficiencies and mental stats
+            beastOldAttrs = findObjs({ _type: 'attribute', _characterid: beastOld.id });
+            beastNew = createObj('character', { name: `${token.get('name')} as ${beastOld.get('name')}`, avatar: beastOld.get('avatar') });
+            // add beast attrs
+            _.each(beastOldAttrs, attr => {
+                if (attr.get('name') != 'ws') {
+                    let attr = createObj('attribute', {
+                        _characterid: beastNew.id,
+                        name: attr.get('name')
+                    })
+                    attr.setWithWorker({
+                        current: attr.get('current'),
+                        max: attr.get('max')
+                    })
+                }
+            });
             // add revert macro
+            createObj('ability', {
+                _characterid: beastNew.id,
+                name: `~EndWildShape`,
+                action: `!aws end`,
+                istokenaction: true
+            });
+            // add player control
+            beastNew.set('controlledby', char.get('controlledby'));
+            // bring over player sheets proficiencies and mental stats
+            let mentalAttrs = ['intelligence', 'wisdom', 'charisma'],
+                skills = [
+                    'strength_save', 'dexterity_save', 'constitution_save', 'intelligence_save', 'wisdom_save', 'charisma_save', 'athletics', 'acrobatics', 'sleight_of_hand', 
+                    'stealth', 'arcana', 'history', 'investigation', 'nature', 'religion', 'animal_handling', 'insight', 'medicine', 'perception', 'survival', 
+                    'deception', 'intimidation', 'performance', 'persuasion'
+                ];
+            _.each(mentalAttrs, attrName => {
+                let beastAttr = findObjs('attribute', { _characterid: beastNew.id, name: attrName })[0];
+                beastAttr.setWithWorker({ current: getAttrByName(charID, attrName, 'current'), max: getAttrByName(charID, getAttrByName(charID, attrName, 'max')) });
+            });
+            let skillsProfs = _.filter(skills, skill => {
+                return getAttrByName(charID, skill + '_prof') == 1;
+            });
+            _.each(skillsProfs, skill => {
+                let attr = findObjs('attribute', { _characterid: charID, name: skill })[0];
+                if (!attr) { attr = createObj('attribute', { _characterid: charID, name: skill }) };
+            })
             // create beast token
             // store old token JSON string in new beast sheet
             // delete old token
