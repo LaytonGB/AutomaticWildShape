@@ -157,14 +157,14 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
             playerID = msg.playerid;
             parts = msg.content.split(' ');
             if (msg.type === 'api' && parts[0] === `${apiCall}`) {
-                if (!parts[1] || !['help', 'revert', 'add', 'remove', 'list', 'populate', 'config', 'RESET'].includes(parts[1])) {
+                if (!parts[1] || !['help', 'end', 'add', 'remove', 'list', 'populate', 'revertDamage', 'config', 'RESET'].includes(parts[1])) {
                     wildShape(msg);
                 } else {
                     switch (parts[1]) {
                         case 'help':
                             showHelp();
                             break;
-                        case 'revert':
+                        case 'end':
                             revertToken();
                             break;
                         case 'add':
@@ -178,6 +178,8 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
                             break;
                         case 'populate':
                             listPopulate();
+                            break;
+                        case 'revertDamage':
                             break;
                         case 'config':
                             if (playerIsGM(playerID)) { setConfig(parts); }
@@ -448,9 +450,23 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
         },
 
         revertToken = function () {
-            // get original token from beast sheet
-            // create original token
+            // create original token from info on wild shaped sheet
+            let tokenString = findObjs({ _type: 'attribute', _characterid: charID, name: 'source_token' })[0],
+                tokenOld;
+            if (tokenString) {
+                tokenOld = createObj('graphic', JSON.parse(tokenString));
+            }
+
             // carry over damage
+            if (token.get(`bar${hpBar}_value`) < 0) {
+                let oldHP = tokenOld.get(`bar${hpBar}_value`),
+                    damage = token.get(`bar${hpBar}_value`).replace('-', ''),
+                    newHP = +oldHP - +damage;
+                tokenOld.set(`bar${hpBar}_value`, newHP); // carry over damage
+                toChat(`${damage} damage carried over from ${tokenOld.get('name')}'s Wild Shape.`, false); // post to chat about damage 
+                toChat(`[Revert Damage](!aws revertDamage ${oldHP})`); // supply revert button (gm only)
+            }
+
             // delete beast token and sheet
         },
 
