@@ -43,6 +43,10 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
                         `${apiCall} populate`
                     ],
                     [
+                        'AWSconfig',
+                        `${apiCall} config`
+                    ],
+                    [
                         'AWShelp',
                         `${apiCall} help`
                     ],
@@ -110,11 +114,11 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
         showConfig = function () {
             let output = `&{template:default} {{name=${name} Config}}`;
             _.each(states, value => {
-                let acceptableValues = value[1] ? value[1] : [true, false],
-                    defaultValue = value[2] != undefined ? value[2] : true,
-                    currentValue = `${getState(value[0])}`,
-                    stringVals = valuesToString(acceptableValues, defaultValue);
                 if (!Array.isArray(value[2])) {
+                    let acceptableValues = value[1] ? value[1] : [true, false],
+                        defaultValue = value[2] != undefined ? value[2] : true,
+                        currentValue = `${getState(value[0])}`,
+                        stringVals = valuesToString(acceptableValues, defaultValue);
                     output += `{{${value[0]}=[${currentValue}](${apiCall} config ${value[0]} ?{New ${value[0]} value${stringVals}})}}`;
                 }
             })
@@ -281,11 +285,11 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
 
             // add beast attrs
             _.each(beastOldAttrs, attr => {
-                let attr = createObj('attribute', {
+                let attrNew = createObj('attribute', {
                     _characterid: beastNew.id,
                     name: attr.get('name')
                 })
-                attr.setWithWorker({
+                attrNew.setWithWorker({
                     current: attr.get('current'),
                     max: attr.get('max')
                 })
@@ -580,7 +584,6 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
             _.each(classAttrs, attrName => {
                 if (getAttrByName(charID, attrName).toLowerCase().includes('druid')) {
                     druidClass = attrName;
-                    break;
                 }
             })
             // find subclass & if moon druid
@@ -637,13 +640,13 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
         },
 
         getSheetsFromSelected = function (objs) {
-            let tokens = _.map(objs, obj => { getObj('graphic', obj._id) }),
-                tokens = _.filter(tokens, token => {
-                    let keep = token.get('represents') != undefined;
-                    if (!keep) { error(`Beast '${token.get('name')}' did not represent a sheet, and so could not be added to the Wild Shape list.`, 10) }
-                    return keep;
-                }),
-                sheets = _.map(tokens, token => { getObj('character', token.get('represents')) });
+            let tokens = _.map(objs, obj => { getObj('graphic', obj._id) });
+            tokens = _.filter(tokens, token => {
+                let keep = token.get('represents') != undefined;
+                if (!keep) { error(`Beast '${token.get('name')}' did not represent a sheet, and so could not be added to the Wild Shape list.`, 10) }
+                return keep;
+            });
+            let sheets = _.map(tokens, token => { getObj('character', token.get('represents')) });
             return sheets;
         },
 
@@ -697,8 +700,8 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
         startupChecks = function () {
             _.each(states, variable => {
                 let values = variable[1] ? variable[1] : [true, false],
-                    defaultValue = variable[2] != undefined ? variable[2] : true;
-                if (!state[`${stateName}_${variable[0]}`] || (!values.includes(state[`${stateName}_${variable[0]}`]) && variable[1] != 'any')) {
+                    defaultValue = variable[2] != undefined && variable[2] !== [] ? variable[2] : true;
+                if ((state[`${stateName}_${variable[0]}`] == undefined && state[`${stateName}_${variable[0]}`] !== []) || (!values.includes(state[`${stateName}_${variable[0]}`]) && variable[1] != 'any')) {
                     error(`'${variable[0]}'** value **was '${state[`${stateName}_${variable[0]}`]}'** but has now been **set to its default** value, '${defaultValue}'.`, -1);
                     state[`${stateName}_${variable[0]}`] = defaultValue;
                 }
