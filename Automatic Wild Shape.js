@@ -180,6 +180,8 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
                             listPopulate();
                             break;
                         case 'revertDamage':
+                            if (playerIsGM(playerID)) { damageRevert(parts[2], parts[3]); }
+                            else { error(`Only GMs can revert the damage carry-over.`, 14) }
                             break;
                         case 'config':
                             if (playerIsGM(playerID)) { setConfig(parts); }
@@ -382,7 +384,7 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
                 attr = attr.replace('risma', '');
                 return attr;
             }
-            
+
             // randomise and/or refill hp
             let beastNewHP = findObjs({ _type: 'attribute', _characterid: beastNew.id, name: 'hp' })[0];
             if (getState('roll_shape_hp') && beastNew.get('npc_hpformula')) {
@@ -454,20 +456,43 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
             let tokenString = findObjs({ _type: 'attribute', _characterid: charID, name: 'source_token' })[0],
                 tokenOld;
             if (tokenString) {
-                tokenOld = createObj('graphic', JSON.parse(tokenString));
+                tokenOld = JSON.parse(tokenString);
+                Object.assign(tokenOld, {
+                    _pageid: token.get('_pageid'),
+                    layer: token.get('layer'),
+                    left: token.get('left'),
+                    top: token.get('top')
+                });
+                tokenOld = createObj('graphic', tokenOld);
+            } else {
+                error(`This token is not in Wild Shape, and so cannot leave Wild Shape.`, 13);
+                return;
             }
 
             // carry over damage
             if (token.get(`bar${hpBar}_value`) < 0) {
                 let oldHP = tokenOld.get(`bar${hpBar}_value`),
                     damage = token.get(`bar${hpBar}_value`).replace('-', ''),
-                    newHP = +oldHP - +damage;
-                tokenOld.set(`bar${hpBar}_value`, newHP); // carry over damage
+                    newHP = +oldHP - +damage,
+                    char = getChar(tokenOld.id), // get tokenOld char
+                    hpAttr = findObjs({ _type: 'attribute', _characterid: char.id, name: 'hp' }); // get char hp attribute
+                hpAttr.setWithWorker({ current: newHP }); // carry over damage
                 toChat(`${damage} damage carried over from ${tokenOld.get('name')}'s Wild Shape.`, false); // post to chat about damage 
-                toChat(`[Revert Damage](!aws revertDamage ${oldHP})`); // supply revert button (gm only)
+                toChat(`[Revert Damage](!aws revertDamage ${tokenOld.id} ${oldHP})`); // supply revert button (gm only)
             }
 
             // delete beast token and sheet
+            let beastSheet = getChar(token);
+            token.remove();
+            beastSheet.remove();
+            return;
+        },
+
+        revertDamage = function (tokenID, hpOld) {
+            let char = getChar(tokenID),
+                hp = findObjs({ _type: 'attribute', _characterid: char.id, name: 'hp' });
+            hp.setWithWorker({ current: hpOld });
+            return;
         },
 
         listAdd = function (objs) {
@@ -486,11 +511,10 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
                     if (index != -1) { list.splice(index, 1); }
                 })
                 state[`${stateName}_beastList`] = list;
-                return;
             } else {
                 error(`No Beast selected. Make sure you select a beast when running the remove command.`, 8);
-                return;
             }
+            return;
         },
 
         listToChat = function () {
@@ -621,6 +645,13 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
                 }),
                 sheets = _.map(tokens, token => { getObj('character', token.get('represents')) });
             return sheets;
+        },
+
+        getChar = function (tokenID) {
+            let token = getObj('graphic', tokenID),
+                charID = token.get('represents'),
+                char = getObj('character', charID);
+            return char;
         },
 
         roll = function (formula) {
