@@ -18,7 +18,7 @@ This system allows every beast to only be added once, and then every Druid or NP
 2) Navigate to your Roll20 game page. This should be the screen with the big game header and title.
 3) Go to Settings > API Scripts.
 4) Click "New Script".
-5) Name the script anything appropriate, and paste the contents of the AutomaticWildShape_X.X.X.js file into that script.
+5) Name the script anything appropriate, and paste the contents of the AutomaticWildShape.js file into that script.
 6) Scroll down and select "Save Script".
 7) When a GM joins the campaign all macros will be automatically created.
 
@@ -69,4 +69,4 @@ If a PC is using the "aws_override" attribute the GM will be notified.
 
 -----
 
-Automatic Wild Shape written by Layton - https://app.roll20.net/users/1519557/layton
+Automatic Wild Shape written by Layton - https://github.com/LaytonGB/
