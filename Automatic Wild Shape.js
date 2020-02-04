@@ -4,7 +4,7 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
             ['beastList', 'any', []],
             ['notifyGM'],
             ['hpBar', [1, 2, 3], 3],
-            ['roll_shape_hp', [false, true], false]
+            ['roll_shape_hp', ['true', 'false'], 'false']
         ],
         name = 'AWS',
         nameError = name + ' ERROR',
@@ -542,6 +542,7 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
                         sheet.get('_defaulttoken', o => {
                             if (o != 'null') {
                                 listAddSheet(sheet);
+                                toChat(`**${sheet.get('name')}** added to Wild Shapes.`, true, playerName);
                             } else {
                                 error(`Could not add '${sheet.get('name')}' to Wild Shape list because there was no default token.`, 4);
                             }
@@ -549,6 +550,7 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
                     }
                 }
             })
+            return;
         },
 
         listAddSheet = function (sheet) {
@@ -699,8 +701,8 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
 
         startupChecks = function () {
             _.each(states, variable => {
-                let values = variable[1] ? variable[1] : [true, false],
-                    defaultValue = variable[2] != undefined && variable[2] !== [] ? variable[2] : true;
+                let values = variable[1] ? variable[1] : ['true', 'false'],
+                    defaultValue = variable[2] != undefined && variable[2] !== [] ? variable[2] : 'true';
                 if ((state[`${stateName}_${variable[0]}`] == undefined && state[`${stateName}_${variable[0]}`] !== []) || (!values.includes(state[`${stateName}_${variable[0]}`]) && variable[1] != 'any')) {
                     error(`'${variable[0]}'** value **was '${state[`${stateName}_${variable[0]}`]}'** but has now been **set to its default** value, '${defaultValue}'.`, -1);
                     state[`${stateName}_${variable[0]}`] = defaultValue;
