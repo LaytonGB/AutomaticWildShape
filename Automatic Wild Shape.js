@@ -115,8 +115,8 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
             let output = `&{template:default} {{name=${name} Config}}`;
             _.each(states, value => {
                 if (!Array.isArray(value[2])) {
-                    let acceptableValues = value[1] ? value[1] : [true, false],
-                        defaultValue = value[2] != undefined ? value[2] : true,
+                    let acceptableValues = value[1] ? value[1] : ['true', 'false'],
+                        defaultValue = value[2] != undefined ? value[2] : 'true',
                         currentValue = `${getState(value[0])}`,
                         stringVals = valuesToString(acceptableValues, defaultValue);
                     output += `{{${value[0]}=[${currentValue}](${apiCall} config ${value[0]} ?{New ${value[0]} value${stringVals}})}}`;
@@ -149,7 +149,7 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
 
         resetConfig = function () {
             _.each(states, value => {
-                let defaultValue = (value[2] != undefined) ? value[2] : true;
+                let defaultValue = value[2] != undefined ? value[2] : 'true';
                 state[`${stateName}_${value[0]}`] = defaultValue;
             })
             toChat(`All settings restored to default, and Wild Shape list emptied.`, true);
@@ -500,8 +500,14 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
         },
 
         listAdd = function (objs) {
-            let beasts = getSheetsFromSelected(objs);
-            _.each(beasts, beast => { listAddSheet(beast) });
+            let beasts = getSheetsFromSelected(objs),
+                success = true;
+            _.each(beasts, beast => { if (!listAddSheet(beast)) { success = false; } });
+            if (success) {
+                toChat(`Beasts successfully added to the Wild Shape list.`, true);
+            } else {
+                error(`Something went wrong - at least one beast could not be added to the Wild Shape list.`, 13);
+            }
             return;
         },
 
@@ -535,32 +541,42 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
         },
 
         listPopulate = function () {
+            let beastsAdded = 0,
+                lastBeast;
             _.each(findObjs({ _type: 'character' }), sheet => {
-                let type = getAttrByName(sheet.id, 'npc_type');
-                if (type.toLowerCase().includes('beast') && getState('beastList').includes(sheet.id)) {
-                    if (!findObjs({ _type: 'attribute', _characterid: beastOld.id, name: 'source_token' })[0]) {
-                        sheet.get('_defaulttoken', o => {
-                            if (o != 'null') {
+                let isNPC = getAttrByName(sheet.id, 'npc'),
+                    type = getAttrByName(sheet.id, 'npc_type');
+                if (isNPC && type.toLowerCase().includes('beast') && searchBeastList(sheet.id, 'id') == -1) {
+                    // if (!findObjs({ _type: 'attribute', _characterid: sheet.id, name: 'source_token' })) {
+                        // sheet.get('_defaulttoken', o => {
+                            // if (o != 'null') {
                                 listAddSheet(sheet);
-                                toChat(`**${sheet.get('name')}** added to Wild Shapes.`, true, playerName);
-                            } else {
-                                error(`Could not add '${sheet.get('name')}' to Wild Shape list because there was no default token.`, 4);
-                            }
-                        })
-                    }
+                                beastsAdded += 1;
+                                lastBeast = sheet.get('name');
+                            // } else {
+                                // error(`Could not add '${sheet.get('npc_name')}' to Wild Shape list because there was no default token.`, 4);
+                            // }
+                        // })
+                    // }
                 }
             })
+            if (beastsAdded == 1) {
+                toChat(`**${lastBeast}** added to Wild Shapes.`, true, playerName);
+            } else if (beastsAdded > 1) {
+                toChat(`**${beastsAdded} beasts added** to Wild Shapes.`, true, playerName);
+            } else {
+                toChat(`No new beasts found.`, false, playerName);
+            }
             return;
         },
 
         listAddSheet = function (sheet) {
-            let beast = { id: sheet.id, name: sheet.get('name'), filter: filter, cr: cr },
-                cr = getAttrByName(sheet.id, 'npc_challenge'),
-                filter = crToFilter(cr);
+            let cr = getAttrByName(sheet.id, 'npc_challenge'),
+                filter = crToFilter(cr),
+                beast = { id: sheet.id, name: sheet.get('name'), filter: filter, cr: cr };
             state[`${stateName}_beastList`].push(beast);
             listSort();
-            toChat(`Beast '${sheet.get('name')}' added to the Wild Shape list.`, true);
-            return;
+            return true;
         },
 
         listSort = function () {
@@ -569,6 +585,17 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
             list.sort((a, b) => a.filter - b.filter); // sort by CR
             list = _.uniq(list, true); // remove duplicates
             state[`${stateName}_beastList`] = list;
+        },
+
+        searchBeastList = function(value, attr) {
+            let index = -1;
+            for (let i = 0; i < getState('beastList').length; i++) {
+                if (getState('beastList')[i][`${attr}`] == value) {
+                    index = i;
+                    break;
+                }
+            }
+            return index;
         },
 
         getPlayerFilter = function () {
