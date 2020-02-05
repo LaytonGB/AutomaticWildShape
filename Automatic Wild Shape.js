@@ -428,8 +428,8 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
                         break;
                 }
                 function setSize(size) {
-                    obj.width = token.get('width') * size;
-                    obj.height = token.get('height') * size;
+                    obj.width *= size;
+                    obj.height *= size;
                 }
             });
             //img setup
