@@ -511,33 +511,9 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
             return;
         },
 
-        listRemove = function (parts, objs) {
-            if (parts[2] || objs[0]) {
-                let beasts = parts[2] ? [parts[2]] : getSheetsFromSelected(objs),
-                    list = getState('beastList'),
-                    index;
-                _.each(beasts, beast => {
-                    index = _.findIndex(list, sheet => { return beast.id == sheet.id; })
-                    if (index != -1) { list.splice(index, 1); }
-                })
-                state[`${stateName}_beastList`] = list;
-            } else {
-                error(`No Beast selected. Make sure you select a beast when running the remove command.`, 8);
-            }
-            return;
-        },
-
-        listToChat = function () {
-            if (getState('beastList').length > 0) {
-                let msg = `&{template:default} {{name=**Full Wild Shape List**}} {{**vv NAME vv**=**vv CR vv**}}`;
-                _.each(getState('beastList'), beast => {
-                    msg += ` {{${beast.name} = CR${beast.cr} [X](!aws remove ${beast.id})}}`;
-                })
-                toChat(msg, undefined, playerName);
-            } else {
-                error(`Wild Shape list has no entries.`, 5);
-                return;
-            }
+        getSheetsFromSelected = function (objs) {
+            let chars = _.map(objs, obj => { return getChar(obj) });
+            return chars;
         },
 
         listPopulate = function () {
@@ -577,6 +553,48 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
             state[`${stateName}_beastList`].push(beast);
             listSort();
             return true;
+        },
+
+        listRemove = function (parts, objs) {
+            if (parts[2] || objs[0]) {
+                let beasts = parts[2] ? [getObj('character', parts[2])] : getSheetsFromSelected(objs),
+                    list = getState('beastList'),
+                    index,
+                    removedCount = 0,
+                    lastBeast = '';
+                _.each(beasts, beast => {
+                    index = _.findIndex(list, sheet => { return beast.id == sheet.id; })
+                    if (index != -1) { 
+                        removedCount += 1;
+                        lastBeast = beast.get('name');
+                        list.splice(index, 1);
+                    }
+                })
+                if (removedCount == 1) {
+                    toChat(`Removed '${lastBeast}' from Wild Shapes.`, true);
+                } else if (removedCount > 1) {
+                    toChat(`Removed ${removedCount} creatures from Wild Shapes.`, true);
+                } else {
+                    error(`Creature was not amongst those in the Wild Shapes.`, 14);
+                }
+                state[`${stateName}_beastList`] = list;
+            } else {
+                error(`No Beast selected. Make sure you select a beast when running the remove command.`, 8);
+            }
+            return;
+        },
+
+        listToChat = function () {
+            if (getState('beastList').length > 0) {
+                let msg = `&{template:default} {{name=**Full Wild Shape List**}} {{**vv NAME vv**=**vv CR vv**}}`;
+                _.each(getState('beastList'), beast => {
+                    msg += ` {{${beast.name} = CR${beast.cr} [X](!aws remove ${beast.id})}}`;
+                })
+                toChat(msg, undefined, playerName);
+            } else {
+                error(`Wild Shape list has no entries.`, 5);
+                return;
+            }
         },
 
         listSort = function () {
@@ -668,21 +686,10 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
             return state[`${stateName}_${value}`];
         },
 
-        getSheetsFromSelected = function (objs) {
-            let tokens = _.map(objs, obj => { getObj('graphic', obj._id) });
-            tokens = _.filter(tokens, token => {
-                let keep = token.get('represents') != undefined;
-                if (!keep) { error(`Beast '${token.get('name')}' did not represent a sheet, and so could not be added to the Wild Shape list.`, 10) }
-                return keep;
-            });
-            let sheets = _.map(tokens, token => { getObj('character', token.get('represents')) });
-            return sheets;
-        },
-
         getChar = function (tokenID) {
             let token = getObj('graphic', tokenID),
-                charID = token.get('represents'),
-                char = getObj('character', charID);
+                charID = token ? token.get('represents') : undefined,
+                char = charID ? getObj('character', charID) : undefined;
             return char;
         },
 
