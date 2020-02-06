@@ -81,12 +81,40 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
         showHelp = function () {
             let commandsArr = [
                 [
-                    '!aws',
-                    'List available wild-shape forms.'
+                    `${apiCall}`,
+                    'If a token is selected, presents a list of eligible wild shapes as per 5th Edition rules. If a character sheet ID is appended and the character sheet is in the wild shape list, the selected token will wild shape into a duplicate of that character sheet.'
+                ],
+                [
+                    `${apiCall} add`,
+                    'Adds the selected token and the sheet it represents to the list of available wild shapes.'
+                ],
+                [
+                    `${apiCall} remove`,
+                    'Removes the selected tokens from the wild shapes list. If a character sheet ID is appended and the character sheet is in the wild shape list, it is removed.'
+                ],
+                [
+                    `${apiCall} populate`,
+                    'Automatically populates the wild shape list with all NPC character sheets of type Beast.'
+                ],
+                [
+                    `${apiCall} list`,
+                    'Lists all creatures in the wild shapes list, and supplies an easy means of their removal.'
+                ],
+                [
+                    `${apiCall} config`,
+                    'Displays configuration settings and an interface with which to change them.'
+                ],
+                [
+                    `${apiCall} RESET`,
+                    'Resets ALL settings and empties the wild shapes list. This is present to fix some otherwise ireparable issues.'
+                ],
+                [
+                    `${apiCall} help`,
+                    'Shows this interface.'
                 ]
             ];
             _.each(commandsArr, command => {
-                let output = `&{template:default} {{name=${code(command[0])} Help}}`;
+                let output = `&{template:default} {{name=${code(command[0])}}}`;
                 _.each(command, function (part, index) {
                     if (index < 3) {
                         let section;
@@ -217,11 +245,19 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
             }
 
             if (!parts[1]) {
-                let crLimit = getPlayerFilter(),
+                if (!getPlayerFilter('druid')) { error(`Only druids and DM controlled NPCs can use Wild Shape.`, 15); return; }
+                let chatOutput = `&{template:default} {{name=${token.get('name')}'s Wild Shapes}}`,
+                    filters = {
+                        cr: getPlayerFilter(),
+                        level: getPlayerFilter('level'),
+                        canSwim: this.level >= 4,
+                        canFly: this.level >= 8
+                    },
                     beastList = _.filter(getState('beastList'), beast => {
-                        return beast.filter <= crLimit;
-                    }),
-                    chatOutput = `&{template:default} {{name=${token.get('name')}'s Wild Shapes}}`;
+                        return beast.filter <= filters.cr
+                        && (!beast.canSwim || (beast.canSwim && filters.canSwim))
+                        && (!beast.canFly || (beast.canFly && filters.canFly));
+                    });
                 if (beastList.length > 0) {
                     let i = 0,
                         cr;
@@ -505,7 +541,7 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
                 lastSuccess = new String,
                 failures = 0;
             _.each(beasts, beast => {
-                if (listAddSheet(beast)) { 
+                if (listAddSheet(beast)) {
                     successes += 1;
                     lastSuccess = beast.get('name');
                 } else { failures += 1; }
@@ -534,17 +570,17 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
                 let isNPC = getAttrByName(sheet.id, 'npc'),
                     type = getAttrByName(sheet.id, 'npc_type');
                 if (isNPC && type.toLowerCase().includes('beast') && searchBeastList(sheet.id, 'id') == -1) {
-                    // if (!findObjs({ _type: 'attribute', _characterid: sheet.id, name: 'source_token' })) {
+                    if (!findObjs({ _type: 'attribute', _characterid: sheet.id, name: 'source_token' })) {
                         // sheet.get('_defaulttoken', o => {
                             // if (o != 'null') {
-                                listAddSheet(sheet);
-                                beastsAdded += 1;
-                                lastBeast = sheet.get('name');
-                            // } else {
-                                // error(`Could not add '${sheet.get('npc_name')}' to Wild Shape list because there was no default token.`, 4);
+                                    listAddSheet(sheet);
+                                    beastsAdded += 1;
+                                    lastBeast = sheet.get('name');
+                                // } else {
+                                    // error(`Could not add '${sheet.get('npc_name')}' to Wild Shape list because there was no default token.`, 4);
                             // }
                         // })
-                    // }
+                    }
                 }
             })
             if (beastsAdded == 1) {
@@ -585,7 +621,7 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
                     lastBeast = '';
                 _.each(beasts, beast => {
                     index = _.findIndex(list, sheet => { return beast.id == sheet.id; })
-                    if (index != -1) { 
+                    if (index != -1) {
                         removedCount += 1;
                         lastBeast = beast.get('name');
                         list.splice(index, 1);
@@ -626,7 +662,7 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
             state[`${stateName}_beastList`] = list;
         },
 
-        searchBeastList = function(value, attr) {
+        searchBeastList = function (value, attr) {
             let index = -1;
             for (let i = 0; i < getState('beastList').length; i++) {
                 if (getState('beastList')[i][`${attr}`] == value) {
@@ -637,7 +673,7 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
             return index;
         },
 
-        getPlayerFilter = function () {
+        getPlayerFilter = function (type) {
             let classAttrs = ['class'],
                 druidClass,
                 druidLevel,
@@ -654,6 +690,8 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
                     druidClass = attrName;
                 }
             })
+            if (type == 'druid') { return druidClass != undefined; }
+            if (type == 'class') { return druidClass; }
             // find subclass & if moon druid
             if (druidClass == 'class') {
                 druidLevel = getAttrByName(charID, 'base_level');
@@ -674,7 +712,9 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
                     return;
                 }
             }
-            // categorise filter by level
+            if (type == 'level') { return druidLevel; }
+            if (type == 'moon') { return moonDruid; }
+            // categorise filter by class and level
             if (!moonDruid) {
                 filter = +druidLevel >= 8 ? 1 : +druidLevel >= 4 ? .5 : +druidLevel >= 2 ? .2 : undefined;
             } else {
