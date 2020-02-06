@@ -184,7 +184,7 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
                             listPopulate();
                             break;
                         case 'revertDamage':
-                            if (playerIsGM(playerID)) { damageRevert(parts[2], parts[3]); }
+                            if (playerIsGM(playerID)) { revertDamage(parts[2], parts[3]); }
                             else { error(`Only GMs can revert the damage carry-over.`, 14) }
                             break;
                         case 'config':
@@ -501,18 +501,29 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
 
         listAdd = function (objs) {
             let beasts = getSheetsFromSelected(objs),
-                success = true;
-            _.each(beasts, beast => { if (!listAddSheet(beast)) { success = false; } });
-            if (success) {
-                toChat(`Beasts successfully added to the Wild Shape list.`, true);
+                successes = 0,
+                lastSuccess = new String,
+                failures = 0;
+            _.each(beasts, beast => {
+                if (listAddSheet(beast)) { 
+                    successes += 1;
+                    lastSuccess = beast.get('name');
+                } else { failures += 1; }
+            });
+            if (successes == 1) {
+                toChat(`${lastSuccess} added to Wild Shapes.`, true);
+            } else if (successes > 1) {
+                toChat(`${successes} creatures successfully added to the Wild Shape list.`, true);
             } else {
-                error(`Something went wrong - at least one beast could not be added to the Wild Shape list.`, 13);
+            }
+            if (failures > 0) {
+                error(`Something went wrong - ${failures} creature(s) could not be added to the Wild Shape list.`, 13);
             }
             return;
         },
 
         getSheetsFromSelected = function (objs) {
-            let chars = _.map(objs, obj => { return getChar(obj) });
+            let chars = _.map(objs, obj => { return getChar(obj._id) });
             return chars;
         },
 
@@ -537,9 +548,9 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
                 }
             })
             if (beastsAdded == 1) {
-                toChat(`**${lastBeast}** added to Wild Shapes.`, true, playerName);
+                toChat(`**${lastBeast} added** to Wild Shapes.`, true);
             } else if (beastsAdded > 1) {
-                toChat(`**${beastsAdded} beasts added** to Wild Shapes.`, true, playerName);
+                toChat(`**${beastsAdded} beasts added** to Wild Shapes.`, true);
             } else {
                 toChat(`No new beasts found.`, false, playerName);
             }
@@ -547,12 +558,22 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
         },
 
         listAddSheet = function (sheet) {
-            let cr = getAttrByName(sheet.id, 'npc_challenge'),
-                filter = crToFilter(cr),
-                beast = { id: sheet.id, name: sheet.get('name'), filter: filter, cr: cr };
-            state[`${stateName}_beastList`].push(beast);
-            listSort();
-            return true;
+            if (sheet) {
+                let cr = getAttrByName(sheet.id, 'npc_challenge'),
+                    filter = crToFilter(cr),
+                    beast = {
+                        id: sheet.id,
+                        name: sheet.get('name'),
+                        filter: filter,
+                        cr: cr,
+                        swimming: getAttrByName(sheet.id, 'npc_speed').search(/swim/i) != -1,
+                        flying: getAttrByName(sheet.id, 'npc_speed').search(/fly/i) != -1
+                    };
+                state[`${stateName}_beastList`].push(beast);
+                listSort();
+                return true;
+            }
+            return false;
         },
 
         listRemove = function (parts, objs) {
