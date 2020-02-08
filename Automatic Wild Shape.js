@@ -2,6 +2,7 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
     var stateName = 'AutomaticWildShape',
         states = [
             ['beastList', 'any', []],
+            ['overrideList', 'any', []],
             ['notifyGM'],
             ['hpBar', [1, 2, 3], 3],
             ['roll_shape_hp', ['true', 'false'], 'false']
@@ -53,13 +54,19 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
                     [
                         'AWSreset',
                         `${apiCall} RESET ?{Are you sure? This will reset all settings and empty the Wild Shape list|No|Yes}`
+                    ],
+                    [
+                        'AWSoverrideToggle',
+                        `${apiCall} override`,
+                        true // sets GM only
                     ]
                 ];
             _.each(macrosArr, macro => {
-                let macroObj = findObjs({ _type: 'macro', name: macro[0] })[0];
+                let macroObj = findObjs({ _type: 'macro', name: macro[0] })[0],
+                    who = macro[2] ? '' : 'all';
                 if (macroObj) {
                     if (macroObj.get('visibleto').includes('all') === false) {
-                        macroObj.set('visibleto', 'all');
+                        macroObj.set('visibleto', who);
                         toChat(`**Macro '${macro[0]}' was made visible to all.**`, true);
                     }
                     if (macroObj.get('action') !== macro[1]) {
@@ -71,7 +78,7 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
                         _playerid: gm.id,
                         name: macro[0],
                         action: macro[1],
-                        visibleto: 'all'
+                        visibleto: who
                     })
                     toChat(`**Macro '${macro[0]}' was created and assigned to ${gm.get('_displayname')}.**`, true);
                 }
@@ -99,6 +106,10 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
                 [
                     `${apiCall} list`,
                     'Lists all creatures in the wild shapes list, and supplies an easy means of their removal.'
+                ],
+                [
+                    `${apiCall} override`,
+                    'Toggles whether the selected character must abide by the wild-shape limits.'
                 ],
                 [
                     `${apiCall} config`,
@@ -168,7 +179,7 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
         },
 
         setConfig = function (parts) {
-            if (parts[2] == states[0][0]) { error(`Oh no you don't, that setting isn't for your grubby little fingers.`, 'DANGER ZONE'); return; }
+            if (parts[2] == states[0][0] || parts[2] == states[1][0]) { error(`Oh no you don't, that setting isn't for your grubby little fingers.`, 'DANGER ZONE'); return; }
             toPlayer(`**${parts[2]}** has been changed **from ${state[`${stateName}_${parts[2]}`]} to ${parts[3]}**.`, true);
             state[`${stateName}_${parts[2]}`] = parts[3];
             showConfig();
@@ -189,7 +200,7 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
             playerID = msg.playerid;
             parts = msg.content.split(' ');
             if (msg.type === 'api' && parts[0] === `${apiCall}`) {
-                if (!parts[1] || !['help', 'end', 'add', 'remove', 'list', 'populate', 'revertDamage', 'config', 'RESET'].includes(parts[1])) {
+                if (!parts[1] || !['help', 'end', 'add', 'remove', 'list', 'populate', 'revertDamage', 'config', 'RESET', 'override'].includes(parts[1])) {
                     wildShape(msg);
                 } else {
                     switch (parts[1]) {
@@ -223,6 +234,9 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
                             if (parts[2] == 'Yes' && playerIsGM(playerID)) { resetConfig(); }
                             else { error(`Only GMs can reset the API settings.`, -2) }
                             break;
+                        case 'override':
+                            if (parts[2] == 'Yes' && playerIsGM(playerID)) { toggleOverride(msg); }
+                            else { error(`Only GMs can toggle override.`, -3) }
                         default:
                             error(`Command not understood:<br>${code(msg.content)}`, 0);
                             break;
@@ -569,7 +583,7 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
             _.each(findObjs({ _type: 'character' }), sheet => {
                 let isNPC = getAttrByName(sheet.id, 'npc'),
                     type = getAttrByName(sheet.id, 'npc_type');
-                if (isNPC && type.toLowerCase().includes('beast') && searchBeastList(sheet.id, 'id') == -1) {
+                if (isNPC && type.search(/beast/i) != -1 && searchBeastList(sheet.id, 'id') == -1) {
                     if (!findObjs({ _type: 'attribute', _characterid: sheet.id, name: 'source_token' })) {
                         // sheet.get('_defaulttoken', o => {
                             // if (o != 'null') {
@@ -662,6 +676,20 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
             state[`${stateName}_beastList`] = list;
         },
 
+        toggleOverride = function (msg) {
+            _.each(msg.selected, obj => {
+                char = getChar(obj._id);
+                if (!getState('overrideList').includes(char.id)) {
+                    state[`${stateName}_overrideList`].push(char.id);
+                    toChat(`**${char.get('name')} override added.**`, true, 'gm');
+                } else {
+                    state[`${stateName}_overrideList`].splice(getState('overrideList').indexOf(char.id), 1);
+                    toChat(`**${char.get('name')} override removed.**`, true, 'gm');
+                }
+            });
+            return;
+        },
+
         searchBeastList = function (value, attr) {
             let index = -1;
             for (let i = 0; i < getState('beastList').length; i++) {
@@ -693,7 +721,9 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
             if (type == 'druid') { return druidClass != undefined; }
             if (type == 'class') { return druidClass; }
             // find subclass & if moon druid
-            if (druidClass == 'class') {
+            if (getState('overrideList').includes(charID)) {
+                return 99;
+            } else if (druidClass == 'class') {
                 druidLevel = getAttrByName(charID, 'base_level');
                 moonDruid = getAttrByName(charID, 'subclass').toLowerCase().includes('moon');
             } else if (druidClass != undefined) {
@@ -704,7 +734,7 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
                     if (playerIsGM(playerID)) {
                         return 99;
                     } else {
-                        error(`NPCs can only wild shape if the GM runs the command or if they have the attribute 'aws_override' set to '1'.`, 7);
+                        error(`NPCs can only wild shape if the GM runs the command or if they have override enabled.`, 7);
                         return;
                     }
                 } else {
