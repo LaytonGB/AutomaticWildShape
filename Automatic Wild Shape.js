@@ -1,9 +1,9 @@
 var AutomaticWildShape = AutomaticWildShape || (function () {
     var stateName = 'AutomaticWildShape',
         states = [
-            ['beastList', 'any', []],
-            ['overrideList', 'any', []],
-            ['notifyGM'],
+            ['beastList', 'any', []], // wild shape list of creatures
+            ['polyConfirm'], // require GM confirmation for player to use Polymorph
+            ['notifyGM'], // notify gm of who is using api
             ['hpBar', [1, 2, 3], 3],
             ['roll_shape_hp', ['true', 'false'], 'false']
         ],
@@ -179,7 +179,7 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
         },
 
         setConfig = function (parts) {
-            if (parts[2] == states[0][0] || parts[2] == states[1][0]) { error(`Oh no you don't, that setting isn't for your grubby little fingers.`, 'DANGER ZONE'); return; }
+            if (parts[2] == states[0][0]) { error(`Oh no you don't, that setting isn't for your grubby little fingers.`, 'DANGER ZONE'); return; }
             toPlayer(`**${parts[2]}** has been changed **from ${state[`${stateName}_${parts[2]}`]} to ${parts[3]}**.`, true);
             state[`${stateName}_${parts[2]}`] = parts[3];
             showConfig();
@@ -258,44 +258,18 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
                 toChat(`**PLAYER IS USING AWS OVERRIDE**`, false, 'gm');
             }
 
-            if (!parts[1]) {
+            if (!parts[1]) { // Druid wild shape list popout
                 if (!getPlayerFilter('druid')) { error(`Only druids and DM controlled NPCs can use Wild Shape.`, 15); return; }
-                let chatOutput = `&{template:default} {{name=${token.get('name')}'s Wild Shapes}}`,
-                    filters = {
-                        cr: getPlayerFilter(),
-                        level: getPlayerFilter('level'),
-                        canSwim: this.level >= 4,
-                        canFly: this.level >= 8
-                    },
-                    beastList = _.filter(getState('beastList'), beast => {
-                        return beast.filter <= filters.cr
-                        && (!beast.canSwim || (beast.canSwim && filters.canSwim))
-                        && (!beast.canFly || (beast.canFly && filters.canFly));
-                    });
-                if (beastList.length > 0) {
-                    let i = 0,
-                        cr;
-                    _.each(beastList, beast => {
-                        if (cr != beast.cr) {
-                            cr = beast.cr;
-                            chatOutput += ` {{CR${cr} Creatures}}`;
-                        }
-                        if (i % 2 == 0) {
-                            chatOutput += ` {{[${beast.name}](!aws ${beast.id}) `;
-                        } else {
-                            chatOutput += `= [${beast.name}](!aws ${beast.id})}}`;
-                        }
-                        i++;
-                    })
-                    if (i % 2 == 0) {
-                        chatOutput += `}}`;
-                    }
-                    toChat(chatOutput, undefined, playerName);
-                } else {
-                    error(`No creatures present in available Wild Shapes.`, 9);
+                transformListToChat('druid');
+            } else if (parts[1] == 'poly') { // if Polymorph
+                if (getState('polyConfirm')) {
+                    let beast = getBeastFromList(parts[2]);
+                    toChat(`Confirmation message sent to GM. You will transform when they accept.`, true, playerName);
+                    toChat(`${playerName} wants to transform into a ${beast.name}. Allow this?<br>[Yes](!aws confirm ${token.id} ${beast.id}) [No](!aws decline ${playerName} ${beast.name})`, false, 'gm'); //working
+                    return;
                 }
-            } else {
-                let beastID = msg.content.replace(parts[0], '').trim(),
+            } else { // if transformation command
+                let beastID = msg.content.replace(parts[0], '').trim(), // delete api call and trim spaces from message for beastID
                     beast = getObj('character', beastID);
                 if (beast) {
                     let crLimit = getPlayerFilter(),
@@ -310,9 +284,55 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
                     }
                 } else {
                     error(`No beast named '${beastID}' found in the Journal.`, 3);
-                    return;
                 }
             }
+            return;
+        },
+
+        getBeastFromList = function (id) {
+            return _.find(getState('beastList'), beast => { return beast.id == id; })
+        },
+
+        transformListToChat = function (type) {
+            let chatOutput = `&{template:default} {{name=${token.get('name')}'s Wild Shapes}}`,
+                filters = {
+                    cr: getPlayerFilter(),
+                    level: getPlayerFilter('level'),
+                    canSwim: this.level >= 4,
+                    canFly: this.level >= 8
+                },
+                beastList = type == 'druid' ?
+                    _.filter(getState('beastList'), beast => {
+                        return beast.filter <= filters.cr
+                            && (!beast.canSwim || (beast.canSwim && filters.canSwim))
+                            && (!beast.canFly || (beast.canFly && filters.canFly));
+                    })
+                    : type == 'poly' ?
+                        beastList = getState('beastList')
+                        : undefined;
+            if (beastList.length > 0) {
+                let i = 0,
+                    cr;
+                _.each(beastList, beast => {
+                    if (cr != beast.cr) {
+                        cr = beast.cr;
+                        chatOutput += ` {{CR${cr} Creatures}}`;
+                    }
+                    if (i % 2 == 0) {
+                        chatOutput += ` {{[${beast.name}](!aws ${beast.id}) `;
+                    } else {
+                        chatOutput += `= [${beast.name}](!aws ${beast.id})}}`;
+                    }
+                    i++;
+                })
+                if (i % 2 == 0) {
+                    chatOutput += `}}`;
+                }
+                toChat(chatOutput, undefined, playerName);
+            } else {
+                error(`No creatures present in available Wild Shapes.`, 9);
+            }
+            return;
         },
 
         transformToken = function (beastOld) {
@@ -586,13 +606,13 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
                 if (isNPC && type.search(/beast/i) != -1 && searchBeastList(sheet.id, 'id') == -1) {
                     if (!findObjs({ _type: 'attribute', _characterid: sheet.id, name: 'source_token' })) {
                         // sheet.get('_defaulttoken', o => {
-                            // if (o != 'null') {
-                                    listAddSheet(sheet);
-                                    beastsAdded += 1;
-                                    lastBeast = sheet.get('name');
-                                // } else {
-                                    // error(`Could not add '${sheet.get('npc_name')}' to Wild Shape list because there was no default token.`, 4);
-                            // }
+                        // if (o != 'null') {
+                        listAddSheet(sheet);
+                        beastsAdded += 1;
+                        lastBeast = sheet.get('name');
+                        // } else {
+                        // error(`Could not add '${sheet.get('npc_name')}' to Wild Shape list because there was no default token.`, 4);
+                        // }
                         // })
                     }
                 }
@@ -676,20 +696,6 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
             state[`${stateName}_beastList`] = list;
         },
 
-        toggleOverride = function (msg) {
-            _.each(msg.selected, obj => {
-                char = getChar(obj._id);
-                if (!getState('overrideList').includes(char.id)) {
-                    state[`${stateName}_overrideList`].push(char.id);
-                    toChat(`**${char.get('name')} override added.**`, true, 'gm');
-                } else {
-                    state[`${stateName}_overrideList`].splice(getState('overrideList').indexOf(char.id), 1);
-                    toChat(`**${char.get('name')} override removed.**`, true, 'gm');
-                }
-            });
-            return;
-        },
-
         searchBeastList = function (value, attr) {
             let index = -1;
             for (let i = 0; i < getState('beastList').length; i++) {
@@ -721,9 +727,7 @@ var AutomaticWildShape = AutomaticWildShape || (function () {
             if (type == 'druid') { return druidClass != undefined; }
             if (type == 'class') { return druidClass; }
             // find subclass & if moon druid
-            if (getState('overrideList').includes(charID)) {
-                return 99;
-            } else if (druidClass == 'class') {
+            if (druidClass == 'class') {
                 druidLevel = getAttrByName(charID, 'base_level');
                 moonDruid = getAttrByName(charID, 'subclass').toLowerCase().includes('moon');
             } else if (druidClass != undefined) {

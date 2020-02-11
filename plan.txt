@@ -1,0 +1,8 @@
+>> POLYMORPH COMPATABILITY
+parts
+> transform
+reqs > nothing but a to b
+> dm confirmation
+reqs > state setting , playerID check , message to chat
+> different outputs of forms to chat depending on the message
+reqs > switch case in Wild Shape 
