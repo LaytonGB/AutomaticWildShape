@@ -1,0 +1,22 @@
+{
+  "name": "automaticwildshape",
+  "description": "Roll20 API for Automatically Wild Shaping using the Roll20 D&amp;D 5th Edition OGL Sheet.",
+  "version": "1.0.0",
+  "main": "Automatic Wild Shape.js",
+  "dependencies": {
+    "@types/roll20": "github:LaytonGB/types-roll20"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LaytonGB/AutomaticWildShape.git"
+  },
+  "author": "Layton Burchell",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/LaytonGB/AutomaticWildShape/issues"
+  },
+  "homepage": "https://github.com/LaytonGB/AutomaticWildShape#readme"
+}
