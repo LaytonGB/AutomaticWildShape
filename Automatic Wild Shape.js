@@ -16,130 +16,150 @@ const AWS_hpbar = 3;
 // Automatic Wild Shape
 on("ready", function() {
     log("Automatic Wild Shape API Ready!");
-    
-    //macro creation
-    if (findObjs({_type: "macro", name: "AutoWildShape"}, {caseInsensitive: true})[0] === undefined) {
-        for (let i = 0; i < findObjs({_type: "player", _online: true}).length; i++) { // for every online player:
-            if (playerIsGM(findObjs({_type: "player", _online: true})[i].id)) { // if there is not a macro and an online player is gm, create macro as player
-                sendChat(AST_name, "/w gm Created **AutoWildShape** macro.");
-                createObj("macro", {
-                    playerid: findObjs({_type: "player", _online: true})[i].id,
-                    name: "AutoWildShape",
-                    visibleto: "all",
-                    action: "!aws"
-                });
-                break;
-            };
-        };
-    };
-    if (findObjs({_type: "macro", name: "AWSadd"}, {caseInsensitive: true})[0] === undefined) {
-        for (let i = 0; i < findObjs({_type: "player", _online: true}).length; i++) { // for every online player:
-            if (playerIsGM(findObjs({_type: "player", _online: true})[i].id)) { // if there is not a macro and an online player is gm, create macro as player
-                sendChat(AST_name, "/w gm Created **AWSadd** macro.");
-                createObj("macro", {
-                    playerid: findObjs({_type: "player", _online: true})[i].id,
-                    name: "AWSadd",
-                    visibleto: "all",
-                    action: "!aws add"
-                });
-                break;
-            };
-        };
-    };
-    if (findObjs({_type: "macro", name: "AWSremove"}, {caseInsensitive: true})[0] === undefined) {
-        for (let i = 0; i < findObjs({_type: "player", _online: true}).length; i++) { // for every online player:
-            if (playerIsGM(findObjs({_type: "player", _online: true})[i].id)) { // if there is not a macro and an online player is gm, create macro as player
-                sendChat(AST_name, "/w gm Created **AWSremove** macro.");
-                createObj("macro", {
-                    playerid: findObjs({_type: "player", _online: true})[i].id,
-                    name: "AWSremove",
-                    visibleto: "all",
-                    action: "!aws remove"
-                });
-                break;
-            };
-        };
-    };
-    if (findObjs({_type: "macro", name: "AWSlist"}, {caseInsensitive: true})[0] === undefined) {
-        for (let i = 0; i < findObjs({_type: "player", _online: true}).length; i++) { // for every online player:
-            if (playerIsGM(findObjs({_type: "player", _online: true})[i].id)) { // if there is not a macro and an online player is gm, create macro as player
-                sendChat(AST_name, "/w gm Created **AWSlist** macro.");
-                createObj("macro", {
-                    playerid: findObjs({_type: "player", _online: true})[i].id,
-                    name: "AWSlist",
-                    visibleto: "all",
-                    action: "!aws list"
-                });
-                break;
-            };
-        };
-    };
-    if (findObjs({_type: "macro", name: "AWSpopulate"}, {caseInsensitive: true})[0] === undefined) {
-        for (let i = 0; i < findObjs({_type: "player", _online: true}).length; i++) { // for every online player:
-            if (playerIsGM(findObjs({_type: "player", _online: true})[i].id)) { // if there is not a macro and an online player is gm, create macro as player
-                sendChat(AST_name, "/w gm Created **AWSpopulate** macro.");
-                createObj("macro", {
-                    playerid: findObjs({_type: "player", _online: true})[i].id,
-                    name: "AWSpopulate",
-                    visibleto: "all",
-                    action: "!aws populate"
-                });
-                break;
-            };
-        };
-    };
 
-    //message catch
+    /*  Check each of the AWS public macros, and if they don't exist find the
+    first GM and create the macro as that GM. */
+    const checkMacros = (function () {
+        const onlinePlayers = findObjs({ _type: "player", _online: true });
+        const existantMacros = findObjs({ _type: "macro" });
+        const gmMacros = [
+            {
+                name: "AutoWildShape",
+                action: "!aws",
+            },
+            {
+                name: "AWSadd",
+                visibleto: "all",
+                action: "!aws add",
+            },
+            {
+                name: "AWSremove",
+                action: "!aws remove",
+            },
+            {
+                name: "AWSlist",
+                action: "!aws list",
+            },
+            {
+                name: "AWSpopulate",
+                action: "!aws populate",
+            },
+        ];
+        gmMacros.forEach((m) => {
+            const thisMacro = existantMacros.find((e) => e.name === m.name);
+            if (thisMacro) continue;
+            onlinePlayers.forEach((p) => {
+                if (!playerIsGM(p.id)) continue;
+                createObj("macro", {
+                    action: m.action,
+                    name: m.name,
+                    playerid: p.id,
+                    visibleto: "all",
+                });
+                sendChat(AST_name, `/w gm Created **${m.name}** macro.`);
+                break;
+            });
+        });
+    })();
+
+    /* User message interpretation */
     on("chat:message", function (msg) {
-        if (msg.type === "api" && msg.content.split(' ')[0] === "!aws") {
-            // if message type is API && when split with spaces, the first part is !aws && a token is selected
-            let playerName = msg.who.substring(0, (msg.who+' ').indexOf(' '));
-            if (AWS_notifyGM) {sendChat(AWS_name, "/w gm -AWS in use by "+playerName+"-");} // notify gm of usage
-            sendChat(AWS_name, "/w "+playerName+" ---AWS---"); // clear a line
-            if (msg.selected !== undefined && msg.content.split(' ') !== 'list' && msg.content.split(' ')[1] !== 'populate' && (msg.content.split(' ')[1] !== 'remove' || msg.content.split(' ', 3)[2] === undefined)) {
-                if (msg.selected[0]._type === "graphic") { // if selected object is token
-                    if (msg.selected.length === 1 || msg.content.split(' ')[1] === 'add' || msg.content.split(' ')[1] === 'remove' || msg.content.split(' ')[1] === 'list') {
-                        let token = getObj(msg.selected[0]._type, msg.selected[0]._id);
-                        let char = getObj("character", token.get("represents"));
-                        if (AWS_debug) {log("Token= "+token.get("name")+" | Character= "+char.get("name")+" | Controlled By= "+char.get("controlledby"))}
-                        if (playerIsGM(msg.playerid) || char.get("controlledby").search("all") || char.get("controlledby").search(msg.who)) {
-                        // if the player using macro controls the token they select OR is a gm
-                            AutomaticWildShape(msg, token, char);
-                        } else {
-                            sendChat(AWS_error, "/w "+playerName+" You must be a GM or control the selected token to use the AWS API. Error code 9.");
-                            log(AWS_error+" Player who did not control token tried to Wild-Shape it. Error Code 9.");
-                            return;
-                        };
-                    } else {
-                        sendChat(AWS_error, "/w "+playerName+" Only one token may be selected. Error Code 7.");
-                        log(AWS_error+" Too many tokens selected. Error Code 7.");
-                        return;
-                    }
+        const parts = msg.content.split(" ");
+        if (msg.type !== "api" || parts[0] !== "!aws") return;
+        if (AWS_notifyGM) sendChat(AWS_name, `/w gm -AWS in use by ${msg.who}-`);
+        switch (true) {
+            case parts.length === 1:
+                if (
+                    msg.selected.length === 1 &&
+                    msg.selected[0]._type === "graphic" &&
+                    (playerIsGM(msg.playerid) ||
+                        new RegExp("all" + "|" + msg.who, "i").test(
+                            char.get("controlledby")
+                        ))
+                ) {
+                    /*  If the player is a gm, or if the token is owned by everyone,
+                        or if the token is owned by the person using the command,
+                        and there is only one token selected,
+                        present the wild shape menu. */
+                    AutomaticWildShape(msg, token, char);
                 } else {
-                    sendChat(AWS_error, "/w "+playerName+" The object you've selected is not a token. Error code 8.");
-                    log(AWS_error+" Non-token object selected. Error code 8.");
-                    return;
+                    if (msg.selected.length !== 1)
+                        toChat(
+                            "One token must be selected when the command is activated.",
+                            {
+                                code: 0,
+                                player: msg.who,
+                                logMsg:
+                                    "AWS menu was called but the incorrect number of tokens were selected.",
+                            }
+                        );
+                    if (msg.selected[0]._type !== "graphic")
+                        toChat(
+                            "You must have the token you wish to transform selected.",
+                            {
+                                code: 0,
+                                player: msg.who,
+                                logMsg:
+                                    "AWS menu was called but a non-token was selected.",
+                            }
+                        );
+                    if (
+                        !playerIsGM(msg.playerid) ||
+                        !new RegExp("all" + "|" + msg.who, "i").test(
+                            char.get("controlledby")
+                        )
+                    )
+                        toChat(
+                            "You must be a GM or control the selected token to use the AWS API.",
+                            {
+                                code: 1,
+                                player: msg.who,
+                                logMsg: `Player '${msg.who}' tried to transform a token they didn't control.`,
+                            }
+                        );
                 }
-            } else if (msg.content.split(' ')[1] === 'list') {
-                AutomaticWildShape(msg, [{name:'mask'}], [{name:'mask'}]);
-            } else if (msg.content.split(' ')[1] === 'populate' && playerIsGM(msg.playerid)) {
-                AutomaticWildShape(msg, [{name:'mask'}], [{name:'mask'}]);
-            } else if (msg.content.split(' ', 3)[1] === 'remove' && msg.content.split(' ', 3)[2] !== undefined && playerIsGM(msg.playerid)) {
-                AutomaticWildShape(msg, [{name:'mask'}], [{name:'mask'}]);
-            } else if (msg.content.split(' ')[1] === 'populate' && !playerIsGM(msg.playerid)) {
-                sendChat(AWS_error, "/w "+playerName+" Only a GM can use this command. Error code 22.");
-                log(AWS_log+" Only a GM can use 'populate' command. Error code 22.");
-                return;
-            } else if (msg.content.split(' ', 3)[1] === 'remove' && msg.content.split(' ', 3)[2] !== undefined && !playerIsGM(msg.playerid)) {
-                sendChat(AWS_error, "/w "+playerName+" Only a GM can use this command. Error code 31.");
-                log(AWS_log+" Only a GM can use 'remove <beast name>' command. Error code 31.");
-                return;
-            } else if (msg.selected === undefined) {
-                sendChat(AWS_error, "/w "+playerName+" No token selected. Error Code 0.");
-                log(AWS_log+" No Token Selected. Error Code 0.");
-                return;
-            };
-        };
+                break;
+            case parts[1] === "list":
+                // present wildshape list for gm editing or player viewing
+                AutomaticWildShape(msg, [{ name: "mask" }], [{ name: "mask" }]);
+                break;
+            case parts[1] === "populate" && playerIsGM(msg.playerid):
+                // auto populate the list of wildshape forms
+                AutomaticWildShape(msg, [{ name: "mask" }], [{ name: "mask" }]);
+                break;
+            case parts[1] === "remove" &&
+                parts[2] !== undefined &&
+                playerIsGM(msg.playerid):
+                // remove the specified beast from the wildshapes list
+                AutomaticWildShape(msg, [{ name: "mask" }], [{ name: "mask" }]);
+                break;
+
+            /* --- ERROR MESSAGES --- */
+            case parts[1] === "populate":
+                toChat("Only admins can auto-populate the AWS list.", {
+                    code: 2,
+                    player: msg.who,
+                    logMsg: `Player '${msg.who}' tried to auto-populate the AWS list.`,
+                });
+                break;
+            case parts[1] === "remove" && !playerIsGM(msg.playerid):
+                toChat("You must be a GM to remove a sheet from the AWS list.", {
+                    code: 3,
+                    player: msg.who,
+                    logMsg: `Player '${msg.who}' tried to remove a sheet from the AWS list but was not a GM.`,
+                });
+                break;
+            case parts[1] === "remove" && parts[2] === undefined:
+                toChat(
+                    "You must supply the name of a sheet to remove it from the AWS list.",
+                    {
+                        code: 4,
+                        player: msg.who,
+                        logMsg: `Player '${msg.who}' entered the command to remove a sheet from the AWS list.`,
+                    }
+                );
+                break;
+        }
     });
 
     function AutomaticWildShape(msg, token, char) {
@@ -981,5 +1001,12 @@ on("ready", function() {
             log(AWS_log+"Selected token's level was too low. Wild Shape is unlocked at 2nd level. Error 4.")
             return;
         }
+    }
+
+    const toChat = function (msg, { code = undefined, player = undefined, logMsg = undefined } = {}) {
+        const isError = code === undefined;
+        const playerName = player.concat(" ").split(" ", 1)[0]
+        sendChat(isError ? AWS_error : AWS_name, `${playerName ? '/w ' + playerName + ' ' : ''}${msg} Error code ${code}.`)
+        log(AWS_log + logMsg + ' Error code ' + code + '.')
     }
 });
