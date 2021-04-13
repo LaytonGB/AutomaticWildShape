@@ -1,6 +1,8 @@
 # AutomaticWildShape
 Roll20 API for Automatically Wild Shaping using the Roll20 D&amp;D 5th Edition OGL Sheet.
 
+**NOTE:** This API has not been updated in over a year. There is no guarantee it will still work.
+
 -----
 
 ## Why This API?
