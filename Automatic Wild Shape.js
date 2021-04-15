@@ -47,9 +47,9 @@ on("ready", function() {
         ];
         gmMacros.forEach((m) => {
             const thisMacro = existantMacros.find((e) => e.name === m.name);
-            if (thisMacro) continue;
+            if (thisMacro) return;
             onlinePlayers.forEach((p) => {
-                if (!playerIsGM(p.id)) continue;
+                if (!playerIsGM(p.id)) return;
                 createObj("macro", {
                     action: m.action,
                     name: m.name,
