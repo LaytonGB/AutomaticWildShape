@@ -1,20 +1,21 @@
 // keep turn order for shape changed creature
 
-// Constants
-const AWS_name = "AWS";
-const AWS_state_name = "AUTOMATICWILDSHAPE";
-const AWS_error = AWS_name+" ERROR";
-const AWS_log = AWS_name+" - ";
-
-// Debug
-const AWS_debug = false;
-
-// Settings
-const AWS_notifyGM = true;
-const AWS_hpbar = 3;
-
 // Automatic Wild Shape
 on("ready", function() {
+
+    // Constants
+    const AWS_name = "AWS";
+    const AWS_state_name = "AUTOMATICWILDSHAPE";
+    const AWS_error = AWS_name+" ERROR";
+    const AWS_log = AWS_name+" - ";
+
+    // Debug
+    const AWS_debug = false;
+
+    // Settings
+    const AWS_notifyGM = true;
+    const AWS_hpbar = 3;
+    
     log("Automatic Wild Shape API Ready!");
     
     //macro creation
