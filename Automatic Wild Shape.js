@@ -22,7 +22,7 @@ on("ready", function() {
     if (findObjs({_type: "macro", name: "AutoWildShape"}, {caseInsensitive: true})[0] === undefined) {
         for (let i = 0; i < findObjs({_type: "player", _online: true}).length; i++) { // for every online player:
             if (playerIsGM(findObjs({_type: "player", _online: true})[i].id)) { // if there is not a macro and an online player is gm, create macro as player
-                sendChat(AST_name, "/w gm Created **AutoWildShape** macro.");
+                sendChat(AWS_name, "/w gm Created **AutoWildShape** macro.");
                 createObj("macro", {
                     playerid: findObjs({_type: "player", _online: true})[i].id,
                     name: "AutoWildShape",
@@ -36,7 +36,7 @@ on("ready", function() {
     if (findObjs({_type: "macro", name: "AWSadd"}, {caseInsensitive: true})[0] === undefined) {
         for (let i = 0; i < findObjs({_type: "player", _online: true}).length; i++) { // for every online player:
             if (playerIsGM(findObjs({_type: "player", _online: true})[i].id)) { // if there is not a macro and an online player is gm, create macro as player
-                sendChat(AST_name, "/w gm Created **AWSadd** macro.");
+                sendChat(AWS_name, "/w gm Created **AWSadd** macro.");
                 createObj("macro", {
                     playerid: findObjs({_type: "player", _online: true})[i].id,
                     name: "AWSadd",
@@ -50,7 +50,7 @@ on("ready", function() {
     if (findObjs({_type: "macro", name: "AWSremove"}, {caseInsensitive: true})[0] === undefined) {
         for (let i = 0; i < findObjs({_type: "player", _online: true}).length; i++) { // for every online player:
             if (playerIsGM(findObjs({_type: "player", _online: true})[i].id)) { // if there is not a macro and an online player is gm, create macro as player
-                sendChat(AST_name, "/w gm Created **AWSremove** macro.");
+                sendChat(AWS_name, "/w gm Created **AWSremove** macro.");
                 createObj("macro", {
                     playerid: findObjs({_type: "player", _online: true})[i].id,
                     name: "AWSremove",
@@ -64,7 +64,7 @@ on("ready", function() {
     if (findObjs({_type: "macro", name: "AWSlist"}, {caseInsensitive: true})[0] === undefined) {
         for (let i = 0; i < findObjs({_type: "player", _online: true}).length; i++) { // for every online player:
             if (playerIsGM(findObjs({_type: "player", _online: true})[i].id)) { // if there is not a macro and an online player is gm, create macro as player
-                sendChat(AST_name, "/w gm Created **AWSlist** macro.");
+                sendChat(AWS_name, "/w gm Created **AWSlist** macro.");
                 createObj("macro", {
                     playerid: findObjs({_type: "player", _online: true})[i].id,
                     name: "AWSlist",
@@ -78,7 +78,7 @@ on("ready", function() {
     if (findObjs({_type: "macro", name: "AWSpopulate"}, {caseInsensitive: true})[0] === undefined) {
         for (let i = 0; i < findObjs({_type: "player", _online: true}).length; i++) { // for every online player:
             if (playerIsGM(findObjs({_type: "player", _online: true})[i].id)) { // if there is not a macro and an online player is gm, create macro as player
-                sendChat(AST_name, "/w gm Created **AWSpopulate** macro.");
+                sendChat(AWS_name, "/w gm Created **AWSpopulate** macro.");
                 createObj("macro", {
                     playerid: findObjs({_type: "player", _online: true})[i].id,
                     name: "AWSpopulate",
