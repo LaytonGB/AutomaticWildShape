@@ -208,6 +208,20 @@ on("ready", function() {
         );
     }
 
+    const toChat = function (
+        msg,
+        { code = undefined, player = undefined, logMsg = undefined } = {}
+    ) {
+        const isError = code !== undefined;
+        const playerName = player.concat(" ").split(" ", 1)[0];
+        sendChat(
+            isError ? AWS_error : AWS_name,
+            `${playerName ? "/w " + playerName + " " : ""}${msg}`
+        );
+        if (isError)
+            log(AWS_log + (logMsg || msg) + " Error code " + code + ".");
+    };
+
     /* ====================================================|Old code below this point|==================================================== */
 
     function AutomaticWildShape(msg, token, char) {
@@ -962,37 +976,55 @@ on("ready", function() {
 
     function getDruid(char, playerName, option) {
         //debug
-        if (AWS_debug) {log(AWS_log+"getDruid() function called.")}
+        if (AWS_debug) {
+            log(AWS_log + "getDruid() function called.");
+        }
 
         let charLevel;
         let charLevelAttr;
         let charClass;
         let charClassAttr;
         let charClassArr = []; // array of all possible class attribute locations
-        if (getAttrByName(char.id, "class") !== undefined) {charClassArr.push(getAttrByName(char.id, "class"))};
+        if (getAttrByName(char.id, "class") !== undefined) {
+            charClassArr.push(getAttrByName(char.id, "class"));
+        }
         if (getAttrByName(char.id, "multiclass1") !== undefined) {
-            if (getAttrByName(char.id, "multiclass1_flag") == 1) {charClassArr.push(getAttrByName(char.id, "multiclass1"))};
+            if (getAttrByName(char.id, "multiclass1_flag") == 1) {
+                charClassArr.push(getAttrByName(char.id, "multiclass1"));
+            }
         }
         if (getAttrByName(char.id, "multiclass2") !== undefined) {
-            if (getAttrByName(char.id, "multiclass1_flag") == 1) {charClassArr.push(getAttrByName(char.id, "multiclass2"))};
+            if (getAttrByName(char.id, "multiclass1_flag") == 1) {
+                charClassArr.push(getAttrByName(char.id, "multiclass2"));
+            }
         }
         if (getAttrByName(char.id, "multiclass3") !== undefined) {
-            if (getAttrByName(char.id, "multiclass1_flag") == 1) {charClassArr.push(getAttrByName(char.id, "multiclass3"))};
+            if (getAttrByName(char.id, "multiclass1_flag") == 1) {
+                charClassArr.push(getAttrByName(char.id, "multiclass3"));
+            }
         }
         if (getAttrByName(char.id, "multiclass4") !== undefined) {
-            if (getAttrByName(char.id, "multiclass1_flag") == 1) {charClassArr.push(getAttrByName(char.id, "multiclass4"))};
+            if (getAttrByName(char.id, "multiclass1_flag") == 1) {
+                charClassArr.push(getAttrByName(char.id, "multiclass4"));
+            }
         }
         let charSubclassAttr;
         let charSubclass;
 
         let druidClassIndex;
-        for (let i = 0; i < charClassArr.length; i++) { // find if any class attribute contains "druid". keep the first.
-            if (charClassArr[i].search(/druid/i) !== -1 || getAttrByName(char.id, 'aws_override') == 1) {
+        for (let i = 0; i < charClassArr.length; i++) {
+            // find if any class attribute contains "druid". keep the first.
+            if (
+                charClassArr[i].search(/druid/i) !== -1 ||
+                getAttrByName(char.id, "aws_override") == 1
+            ) {
                 druidClassIndex = i;
                 break;
             }
         }
-        if(AWS_debug) {log(AWS_log+`druidClassIndex: `+druidClassIndex)}
+        if (AWS_debug) {
+            log(AWS_log + `druidClassIndex: ` + druidClassIndex);
+        }
 
         switch (druidClassIndex) {
             case 0: // assign attributes based on which attribute contained "druid"
@@ -1008,57 +1040,87 @@ on("ready", function() {
             case 2:
             case 3:
             case 4:
-                charLevelAttr = `multiclass`+druidClassIndex+`_lvl`;
+                charLevelAttr = `multiclass` + druidClassIndex + `_lvl`;
                 charLevel = getAttrByName(char.id, charLevelAttr);
-                charClassAttr = `multiclass`+druidClassIndex;
+                charClassAttr = `multiclass` + druidClassIndex;
                 charClass = getAttrByName(char.id, charClassAttr);
-                charSubclassAttr = `multiclass`+druidClassIndex+`_subclass`;
+                charSubclassAttr = `multiclass` + druidClassIndex + `_subclass`;
                 charSubclass = getAttrByName(char.id, charSubclassAttr);
                 break;
 
             default:
-                if (getAttrByName(char.id, 'npc') == 1) {
-                    sendChat(AWS_error,`/w `+playerName+` NPC's can't use wildshape unless you set the "aws_override" attribute to "1".`);
+                if (getAttrByName(char.id, "npc") == 1) {
+                    sendChat(
+                        AWS_error,
+                        `/w ` +
+                            playerName +
+                            ` NPC's can't use wildshape unless you set the "aws_override" attribute to "1".`
+                    );
                     return;
                 } else {
-                    sendChat(AWS_error, "/w "+playerName+" No Druid class found. Only druids can use wildshape. Error code 40.")
-                    log(AWS_log+"No Druid class found. Only druids can use wildshape. Error code 40.")
+                    sendChat(
+                        AWS_error,
+                        "/w " +
+                            playerName +
+                            " No Druid class found. Only druids can use wildshape. Error code 40."
+                    );
+                    log(
+                        AWS_log +
+                            "No Druid class found. Only druids can use wildshape. Error code 40."
+                    );
                     return;
                 }
         }
         // if the character class contains "druid", level is a number, and level is at least 2, allow wild shape
-        if ((charClass.search(/druid/i) !== -1 && !isNaN(charLevel) && charLevel >= 2) || getAttrByName(char.id, 'aws_override') == 1) {
+        if (
+            (charClass.search(/druid/i) !== -1 &&
+                !isNaN(charLevel) &&
+                charLevel >= 2) ||
+            getAttrByName(char.id, "aws_override") == 1
+        ) {
             switch (option) {
-                case 'level':
+                case "level":
                     return charLevel;
-                case 'subclass':
+                case "subclass":
                     return charSubclass;
-                case 'isdruid':
+                case "isdruid":
                     return true;
                 default:
-                        sendChat(AWS_error, "/w "+playerName+" No Druid class found. Only druids can use wildshape. Error code 41.")
-                        log(AWS_log+"No Druid class found. Only druids can use wildshape. Error code 41.")
-                        return;
+                    sendChat(
+                        AWS_error,
+                        "/w " +
+                            playerName +
+                            " No Druid class found. Only druids can use wildshape. Error code 41."
+                    );
+                    log(
+                        AWS_log +
+                            "No Druid class found. Only druids can use wildshape. Error code 41."
+                    );
+                    return;
             }
         } else if (isNaN(charLevel)) {
-            sendChat(AWS_error, "/w "+playerName+" Selected token's level not a number. Error code 42.")
-            log(AWS_log+"Selected token's level not a number. Error code 42.")
+            sendChat(
+                AWS_error,
+                "/w " +
+                    playerName +
+                    " Selected token's level not a number. Error code 42."
+            );
+            log(
+                AWS_log + "Selected token's level not a number. Error code 42."
+            );
             return;
         } else {
-            sendChat(AWS_error, "/w "+playerName+" Selected token's level is too low. Wild Shape is unlocked at 2nd level. Error 4.")
-            log(AWS_log+"Selected token's level was too low. Wild Shape is unlocked at 2nd level. Error 4.")
+            sendChat(
+                AWS_error,
+                "/w " +
+                    playerName +
+                    " Selected token's level is too low. Wild Shape is unlocked at 2nd level. Error 4."
+            );
+            log(
+                AWS_log +
+                    "Selected token's level was too low. Wild Shape is unlocked at 2nd level. Error 4."
+            );
             return;
         }
-    }
-
-    const toChat = function (msg, { code = undefined, player = undefined, logMsg = undefined } = {}) {
-        const isError = code !== undefined;
-        const playerName = player.concat(" ").split(" ", 1)[0];
-        sendChat(
-            isError ? AWS_error : AWS_name,
-            `${playerName ? "/w " + playerName + " " : ""}${msg}`
-        );
-        if (isError)
-            log(AWS_log + (logMsg || msg) + " Error code " + code + ".");
     }
 });
