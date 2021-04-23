@@ -64,110 +64,158 @@ on("ready", function() {
 
     /* User message interpretation */
     on("chat:message", function (msg) {
-        const parts = msg.content.split(" ");
+        const parts = msg.content.toLowerCase().split(" ");
         if (msg.type !== "api" || parts[0] !== "!aws") return;
-        if (AWS_notifyGM) sendChat(AWS_name, `/w gm -AWS in use by ${msg.who}-`);
+        if (AWS_notifyGM)
+            toChat(`-AWS in use by ${msg.who}-`, { player: "gm" });
+
         switch (true) {
             case parts.length === 1:
-                if (
-                    msg.selected.length === 1 &&
-                    msg.selected[0]._type === "graphic" &&
-                    (playerIsGM(msg.playerid) ||
-                        new RegExp("all" + "|" + msg.who, "i").test(
-                            char.get("controlledby")
-                        ))
-                ) {
-                    /*  If the player is a gm, or if the token is owned by everyone,
-                        or if the token is owned by the person using the command,
-                        and there is only one token selected,
-                        present the wild shape menu. */
-                    AutomaticWildShape(msg, token, char);
-                } else {
-                    if (msg.selected.length !== 1)
-                        toChat(
-                            "One token must be selected when the command is activated.",
-                            {
-                                code: 0,
-                                player: msg.who,
-                                logMsg:
-                                    "AWS menu was called but the incorrect number of tokens were selected.",
-                            }
-                        );
-                    if (msg.selected[0]._type !== "graphic")
-                        toChat(
-                            "You must have the token you wish to transform selected.",
-                            {
-                                code: 0,
-                                player: msg.who,
-                                logMsg:
-                                    "AWS menu was called but a non-token was selected.",
-                            }
-                        );
-                    if (
-                        !playerIsGM(msg.playerid) ||
-                        !new RegExp("all" + "|" + msg.who, "i").test(
-                            char.get("controlledby")
-                        )
-                    )
-                        toChat(
-                            "You must be a GM or control the selected token to use the AWS API.",
-                            {
-                                code: 1,
-                                player: msg.who,
-                                logMsg: `Player '${msg.who}' tried to transform a token they didn't control.`,
-                            }
+                return transformOptions();
+
+            case parts[1] === "list":
+                switch (true) {
+                    /*
+                    !aws list => Show the complete wild shapes list to this user.
+                    !aws list add => Add the currently selected token(s) to the wild shapes list.
+                    !aws list remove => Remove the sheets listed by their ID(s).
+                    */
+                    case parts.length === 2:
+                        return listAll(msg);
+                    case parts[1] === "add":
+                        if (!playerIsGM(msg.playerid))
+                            return toChat(
+                                "You must be a GM to alter the wild shapes list.",
+                                { code: 16, player: msg.who }
+                            );
+                        return listAdd(msg);
+                    case parts[1] === "remove":
+                        if (!playerIsGM(msg.playerid))
+                            return toChat(
+                                "You must be a GM to alter the wild shapes list.",
+                                { code: 17, player: msg.who }
+                            );
+                        return listRemove(msg);
+                    default:
+                        return toChat(
+                            'Command not understood, commands starting with "!aws list" must be followed by nothing, "add", or "remove".',
+                            { code: 12, player: msg.who }
                         );
                 }
-                break;
-            case parts[1] === "list":
-                // present wildshape list for gm editing or player viewing
-                AutomaticWildShape(msg, [{ name: "mask" }], [{ name: "mask" }]);
-                break;
-            case parts[1] === "populate" && playerIsGM(msg.playerid):
-                // auto populate the list of wildshape forms
-                AutomaticWildShape(msg, [{ name: "mask" }], [{ name: "mask" }]);
-                break;
-            case parts[1] === "remove" &&
-                parts[2] !== undefined &&
-                playerIsGM(msg.playerid):
-                // remove the specified beast from the wildshapes list
-                AutomaticWildShape(msg, [{ name: "mask" }], [{ name: "mask" }]);
-                break;
 
-            /* --- ERROR MESSAGES --- */
             case parts[1] === "populate":
-                toChat("Only admins can auto-populate the AWS list.", {
-                    code: 2,
+                /*
+                !aws populate => Search all character sheets and add any sheet with type "beast" to the wild shapes list.
+                */
+                if (parts.length > 2)
+                    return toChat(
+                        'Command not understood, the "!aws populate" command should not be followed by any other text.',
+                        { code: 13, player: msg.who }
+                    );
+                if (!playerIsGM(msg.playerid))
+                    return toChat(
+                        "You must be a GM to populate the wild shapes list.",
+                        { code: 17, player: msg.who }
+                    );
+                return populateList(msg);
+
+            default:
+                /* ---------------| Must come last in list |-------------------
+                because other commands have set variables (unlike <beast_name>)
+                */
+                return transformOptions();
+        }
+
+        function transformOptions() {
+            if (
+                msg.selected.length !== 1 ||
+                msg.selected._type[0] !== "graphic"
+            )
+                return toChat("A token must be selected.", {
+                    code: 11,
                     player: msg.who,
-                    logMsg: `Player '${msg.who}' tried to auto-populate the AWS list.`,
                 });
-                break;
-            case parts[1] === "remove" && !playerIsGM(msg.playerid):
-                toChat("You must be a GM to remove a sheet from the AWS list.", {
-                    code: 3,
+            if (
+                !playerIsGM(msg.playerid) &&
+                !new RegExp("all|" + msg.who, "i").test()
+            )
+                return toChat("You must control the selected token.", {
+                    code: 12,
                     player: msg.who,
-                    logMsg: `Player '${msg.who}' tried to remove a sheet from the AWS list but was not a GM.`,
                 });
-                break;
-            case parts[1] === "remove" && parts[2] === undefined:
-                toChat(
-                    "You must supply the name of a sheet to remove it from the AWS list.",
-                    {
-                        code: 4,
-                        player: msg.who,
-                        logMsg: `Player '${msg.who}' entered the command to remove a sheet from the AWS list.`,
-                    }
-                );
-                break;
+            switch (true) {
+                /*
+                !aws => return list of transform options
+                !aws end => end transformation
+                !aws <beast_name> => transform into beast
+                */
+                case parts.length === 1:
+                    return giveBeastList(msg);
+                case parts[1] === "end":
+                    return endTransform(msg);
+                default:
+                    return transform(msg);
+            }
         }
     });
 
+    /**
+     * Outputs a list of all wild shapes with some details.
+     * @param {ChatEventData} msg Is the user input.
+     */
+    function listAll(msg) {
+        const attrs = findObjs({
+            _type: "attribute",
+            name: "ws",
+        });
+        if (attrs.length > 0) makeTableFromAttrs(attrs);
+        else
+            return toChat("There are no sheets in the wild shape list.", {
+                code: 21,
+                player: msg.who,
+            });
+    }
+
+    /**
+     * Make a table out of the supplied attribute's sheets ready to post to chat.
+     * @param {Map<id:string = attr:Attribute>} sheetAttrs A map of attribute objects with their related character ids as the key.
+     * @param {{cr?: boolean, remove?: boolean}} cr,  cr: boolean, remove: boolean
+     */
+    function makeTableFromAttrs(attrs, { cr = false, remove = false } = {}) {
+        const tableName = cr ? "Wild Shapes by CR" : "Wild Shapes by Name";
+        let out = `&{template:default}{{Name=**${tableName}**}}`;
+        /*
+        Get array of Names or CRs
+        Using names then CRs(?), sort shapes
+        For each shape add a section to the output in order
+        */
+        attrs.map((a) => {
+            const chal = getAttrByName(a._characterid, "npc_challenge");
+            return {
+                id: a._characterid,
+                name: getObj(a._characterid).get("name"),
+                wsId: a.id,
+                cr: chal,
+                crSort: Math.resolve(chal),
+            };
+        });
+        attrs.sort((a, b) => a.name - b.name);
+        if (cr) attrs.sort((a, b) => a.crSort - b.crSort);
+        attrs.forEach((a) =>
+            out.concat(
+                `{{${a.name}=${cr ? a.cr : ""}[X](!<br>aws list remove ${a.name})}}`
+            )
+        );
+    }
+
+    /* ====================================================|Old code below this point|==================================================== */
+
     function AutomaticWildShape(msg, token, char) {
         if (AWS_debug) {log("AWS Main function called.")};
-    
+
         // message split-up
         let parts = msg.content.split(' ', 2); // split incoming message into 2 parts
-    
+
         // objects setup
         let playerName = msg.who.substring(0, (msg.who+' ').indexOf(' ')); // player's first name
         let charName;
@@ -186,11 +234,11 @@ on("ready", function() {
         if (getAttrByName(char.id, 'aws_override') == 1 && getAttrByName(char.id, 'npc') != 1) {
             sendChat(AWS_name, `/w gm ---**PLAYER IS USING AWS OVERRIDE**---`);
         }
-            
+
         // Make list of beast names
         let beastList;
         beastList = makeBeastList(msg);
-    
+
         // read message, filter actions based on content
         log(`Got to command filter.`);
         if (parts[1]) { // if there is more than 1 part
@@ -198,7 +246,7 @@ on("ready", function() {
                 case 'end':
                     revert(playerName, token);
                     break;
-    
+
                 case 'add':
                     addBeast(msg, playerName);
                     break;
@@ -214,7 +262,7 @@ on("ready", function() {
                 case 'populate':
                     populate(playerName);
                     break;
-    
+
                 default: // if part 2 is likely a beast name, check name against the beastList. If found, transform.
                     parts[1] = msg.content.replace(parts[0]+' ', ''); // make parts[1] into a string of that beast's name
                     let msgBeast;
@@ -253,29 +301,29 @@ on("ready", function() {
         } else { // check class & level and post filtered wild shape options to chat
             //debug
             if (AWS_debug) {log(AWS_log+"Reached beastListToChat() function caller.")}
-    
+
             let charLevel = getDruid(char, playerName, 'level');
             if (!charLevel) { // stop here if they didn't pass druid checks.
                 return;
             }
             let charSubclass = getDruid(char, playerName, 'subclass');
-            beastListToChat(beastList, char, charFirstName, charLevel, charSubclass, playerName); 
+            beastListToChat(beastList, char, charFirstName, charLevel, charSubclass, playerName);
         }
     }
-    
+
     // --- FUNCTIONS ---
     function makeBeastList(msg) {
         //debug
         if (AWS_debug) {log(AWS_log+"makeBeastList() function called.")};
         let x = 1;
-    
+
         // compile array of beast names based on "ws" attribute existence
         let beastArray = [];
         let entry = 0;
         _.each(findObjs({_type: "character"}), function(sheet) { // for every object of type character in game
             //debug
             if (AWS_debug) {log("Sheet "+x+" ID: "+sheet.id+" | Sheet "+x+" name: "+sheet.get("name"))};
-    
+
             if (findObjs({ // if the attribute "ws" exists
                 _characterid: sheet.id,
                 _type: "attribute",
@@ -294,7 +342,7 @@ on("ready", function() {
                 beastArray.push(beast);
                 entry++;
             }
-    
+
             //debug
             x++;
         })
@@ -309,7 +357,7 @@ on("ready", function() {
         log('hit array sorter')
         beastArray.sort((a,b) => (a.name > b.name) ? 1 : -1);
         beastArray.sort((a, b) => a.filter - b.filter);
-    
+
         // if no ids, return error. else return ids.
         if (beastArray.length > 0) {
             return beastArray; // return array of beast objects
@@ -318,11 +366,11 @@ on("ready", function() {
             return;
         }
     }
-    
+
     function beastListToChat(beastList, char, charName, charLevel, charSubclass, playerName) {
         //debug
         if (AWS_debug) {log(AWS_log+"beastListToChat() function called.")};
-    
+
         let crFilter = getCRlimit(char, charLevel, charSubclass, 'filter');
         let crLimit = getCRlimit(char, charLevel, charSubclass, 'limit');
 
@@ -335,7 +383,7 @@ on("ready", function() {
             // Cull beastList by CR
             let finalBeasts = [];
             _.each(beastList, function(beast) {
-                if (!isNaN(beast.filter) && beast.filter <= crFilter) {finalBeasts.push(beast)}; 
+                if (!isNaN(beast.filter) && beast.filter <= crFilter) {finalBeasts.push(beast)};
                 // if the value of beast's CR is a number & less than the PC's crLimit, add to finalBeasts array
                 log(`beastName: `+getAttrByName(beast.id, 'npc_name')+` | beastCR: `+beast.cr+` | beastFilter: `+beast.filter+` | crFilter: `+crFilter+` | beastFilter <= crFilter: `+(+beast.filter <= +crFilter))
             });
@@ -346,18 +394,18 @@ on("ready", function() {
                 log(AWS_log+`No Beasts in BeastList of appropiate CR. Error code 20.`)
                 return;
             }
-        
+
             // Compose Chat Message
             let outputList = " &{template:default} {{name=SELECT WILD SHAPE}}"
             let i = 0;
             _.each(finalBeasts, function(beast) {
                 beast.name = getAttrByName(beast.id, "npc_name");
                 beast.cr = getAttrByName(beast.id, 'npc_challenge');
-        
+
                 if (beast.name !== undefined) {
                     //debug
                     if (AWS_debug) {log(AWS_log+'Beast '+(i+1)+', Name: '+beast.name+', added to chat output.')};
-        
+
                     if (i % 2 === 0) { // if first half of macro
                         outputList = outputList.concat(" {{["+beast.name+" (CR"+beast.cr+")](!<br>aws "+beast.name+") = ");
                     } else { // if second half of macro
@@ -373,17 +421,17 @@ on("ready", function() {
                     return;
                 }
             });
-        
+
             // Chat Output Part 1, CR limit and intro
             sendChat(AWS_name, "/w "+playerName+" Please select a beast of **CR "+crLimit+" or lower** from the following list:");
-        
+
             // Chat Output Part 2, Beast List
             sendChat(AWS_name, "/w "+playerName + outputList);
-            
+
             log(AWS_log+`List of creatures posted for character `+charName)
         }
     }
-    
+
     function transform(playerName, pcToken, pcSheet, beastID, pcID) {
         //debug
         if (AWS_debug) {log(AWS_log+"transform() function called. With "+getObj('character', beastID).get('name')+' as beast.')};
@@ -396,7 +444,7 @@ on("ready", function() {
         let wildSheet = createObj('character', {name: pcSheet.get(`name`)+` as `+beast.get(`name`), avatar: beast.get(`avatar`)});
         sendChat(AWS_name, pcSheet.get('name')+` wild-shaped into a `+beast.get('name')+`.`);
         let beastAttrs = findObjs({_type: 'attribute', _characterid: beast.id});
-    
+
         if (beastAttrs[0] !== undefined) {
             for (let i = 0; i < beastAttrs.length; i++) {
                 //for ever attribute on old beast sheet, duplicate onto new beast sheet
@@ -434,8 +482,8 @@ on("ready", function() {
 
             // list of all skill attributes
             let allSkills = [
-                'strength_save', 'dexterity_save', 'constitution_save', 'intelligence_save', 'wisdom_save', 'charisma_save', 'athletics', 'acrobatics', 'sleight_of_hand', 
-                'stealth', 'arcana', 'history', 'investigation', 'nature', 'religion', 'animal_handling', 'insight', 'medicine', 'perception', 'survival', 
+                'strength_save', 'dexterity_save', 'constitution_save', 'intelligence_save', 'wisdom_save', 'charisma_save', 'athletics', 'acrobatics', 'sleight_of_hand',
+                'stealth', 'arcana', 'history', 'investigation', 'nature', 'religion', 'animal_handling', 'insight', 'medicine', 'perception', 'survival',
                 'deception', 'intimidation', 'performance', 'persuasion'
             ];
 
@@ -457,10 +505,10 @@ on("ready", function() {
 
             let attr;
             // for every skill the character is proficient in,
-            for (let i = 0; i < profSkills.length; i++) { 
+            for (let i = 0; i < profSkills.length; i++) {
 
                 // find the relevant attribute and set the attribute as 'attr'
-                if (strSkills.indexOf(profSkills[i]) != -1) { 
+                if (strSkills.indexOf(profSkills[i]) != -1) {
                     attr = 'strength_mod';
                 } else if (dexSkills.indexOf(profSkills[i]) != -1) {
                     attr = 'dexterity_mod';
@@ -488,7 +536,7 @@ on("ready", function() {
                 }
                 let charPB = getAttrByName(pcSheet.id, 'pb');
                 let beastPB = skillBonus - beastAttrMod;
-                
+
                 // if (character's proficiency bonus for skill) is higher than (beast's proficiency bonus for skill)
                 if (beastPB === NaN || charPB > beastPB) {
                     // use the character's prof bonus + beast's attr bonus
@@ -526,10 +574,10 @@ on("ready", function() {
                 wildSheet.remove();
                 log(AWS_log+'ERROR: Beast sheet has no default token. Error code 21.');
                 return;
-                
+
             } else {
                 let obj = JSON.parse(o);
-                
+
                 if (playerPageID === undefined || pcToken.get('name') === undefined || beast.get('name') === undefined) {
                     sendChat(AWS_error, `/w `+playerName+` Some parts of WildShape default token were incorrectly prepared. Try re-setting default token and ensuring both character token and wild-shape token have names set. Error code 24.`);
                     sendChat(AWS_name, `/w `+playerName+` Character '`+wildSheet.get('name')+`' deleted.`);
@@ -587,7 +635,7 @@ on("ready", function() {
                     img = img.replace("med.", "thumb.");
                     img = img.replace("min.", "thumb.");
                     obj.imgsrc = img;
-            
+
                     //place token
                     let wildToken = createObj('graphic', obj);
                     if (wildToken === undefined) {
@@ -599,7 +647,7 @@ on("ready", function() {
                     } else {
                         toFront(wildToken);
                         setDefaultTokenForCharacter(wildSheet, wildToken);
-        
+
                         //delete old token
                         pcToken.remove();
                     }
@@ -608,11 +656,11 @@ on("ready", function() {
 
         });
     };
-    
+
     function revert(playerName, token) {
         //debug
         if (AWS_debug) {log(AWS_log+"revert() function called.")};
-        
+
         let ws = getObj('character', token.get('represents'));
         let wsName = ws.get('name');
         let campaign = getObj('campaign', 'root');
@@ -665,7 +713,7 @@ on("ready", function() {
 
                 let charToken = createObj('graphic', obj);
                 toFront(charToken);
-                
+
 
                 //HP calc
                 let tokenHP = token.get('bar'+AWS_hpbar+'_value');
@@ -692,15 +740,15 @@ on("ready", function() {
             return;
         }
     }
-    
+
     function addBeast(msg, playerName) {
         //debug
         if (AWS_debug) {log(AWS_log+"addBeast() function called.")};
-    
+
         _.each(msg.selected, function(obj) {
             let beastToken = getObj(obj._type, obj._id);
             let beast = getObj('character', beastToken.get('represents')) // TODO stop sheets getting added if they have no default token
-    
+
             if (getAttrByName(beast.id, 'ws') === undefined || getAttrByName(beast.id, 'ws') != 1) {
                 beast.get('_defaulttoken', function (o) {
                     if (o == 'null') {sendChat(AWS_name, '/w '+playerName+' **WARNING: '+beast.get('name')+' (CR '+getAttrByName(beast.id, "npc_challenge")+') has no default token.**')}
@@ -712,7 +760,7 @@ on("ready", function() {
                     sendChat(AWS_name, '/w '+playerName+' '+beast.get('name')+' (CR '+getAttrByName(beast.id, "npc_challenge")+') has been added to the available Wild Shapes.');
                     return;
                 })
-                
+
             } else {
                 sendChat(AWS_error, '/w '+playerName+' '+beast.get('name')+' (CR '+getAttrByName(beast.id, "npc_challenge")+') is already amongst the available Wild Shapes. Error code 15.');
                 log(AWS_log+beast.get('name')+' (CR '+getAttrByName(beast.id, "npc_challenge")+') is already amongst the available Wild Shapes. Error code 15.');
@@ -720,21 +768,21 @@ on("ready", function() {
             }
         })
     }
-    
+
     function removeBeast(msg, playerName) {
         //debug
         if (AWS_debug) {log(AWS_log+"removeBeast() function called.")};
-    
+
         if(!msg.content.split(' ', 3)[2] || msg.content.split(' ', 3)[2] == undefined) { // if no beast name was supplied with remove command
             _.each(msg.selected, function(obj) {
                 let beastToken = getObj(obj._type, obj._id);
                 let beast;
                 if (beastToken.get('represents')) {
                     beast = getObj('character', beastToken.get('represents'));
-        
+
                     if (beast !== undefined) {
                         log('Attempting to Remove '+beast.get('name')+', with WS value: '+getAttrByName(beast.id, 'ws'));
-                
+
                         if (getAttrByName(beast.id, 'ws') !== undefined) {
                             findObjs({_type: 'attribute', _characterid: beast.id, name: 'ws'}, {caseInsensitive: true})[0].remove();
                             sendChat(AWS_name, '/w '+playerName+' '+beast.get('name')+' (CR '+getAttrByName(beast.id, "npc_challenge")+') has been removed from the available Wild Shapes.');
@@ -779,7 +827,7 @@ on("ready", function() {
             }
         }
     }
-    
+
     function listBeasts(beastList, playerName) {
         //debug
         if (AWS_debug) {log(AWS_log+"listBeasts() function called.")};
@@ -831,7 +879,7 @@ on("ready", function() {
     function getCRlimit(char, charLevel, charSubclass, option) {
         //debug
         if (AWS_debug) {log(AWS_log+"getCRlimit() function called.")};
-    
+
         //moonDruid setup
         let subclass = charSubclass;
         let moonDruid = false;
@@ -840,7 +888,7 @@ on("ready", function() {
             //debug
             if(AWS_debug){log(AWS_log+`MoonDruid = true`)}
         }
-    
+
         //cr limit setup
         let crLimit;
         let crFilter;
@@ -853,7 +901,7 @@ on("ready", function() {
         } else if (moonDruid && charLevel >= 6) {
             //debug
             if (AWS_debug) {log(AWS_log+"Selected token represents a Moon Druid of at least 2nd level.")};
-    
+
             crLimit = Math.floor(Math.max(charLevel/3, 1));
             crFilter = crLimit;
         } else {
@@ -876,7 +924,7 @@ on("ready", function() {
                 return crFilter;
             case 'limit':
                 return crLimit;
-            default: 
+            default:
                 log(AWS_log+`Error code 40.`);
         }
     }
@@ -955,10 +1003,10 @@ on("ready", function() {
                 charSubclassAttr = "subclass";
                 charSubclass = getAttrByName(char.id, charSubclassAttr);
                 break;
-            
+
             case 1:
-            case 2: 
-            case 3: 
+            case 2:
+            case 3:
             case 4:
                 charLevelAttr = `multiclass`+druidClassIndex+`_lvl`;
                 charLevel = getAttrByName(char.id, charLevelAttr);
@@ -1004,9 +1052,13 @@ on("ready", function() {
     }
 
     const toChat = function (msg, { code = undefined, player = undefined, logMsg = undefined } = {}) {
-        const isError = code === undefined;
-        const playerName = player.concat(" ").split(" ", 1)[0]
-        sendChat(isError ? AWS_error : AWS_name, `${playerName ? '/w ' + playerName + ' ' : ''}${msg} Error code ${code}.`)
-        log(AWS_log + logMsg + ' Error code ' + code + '.')
+        const isError = code !== undefined;
+        const playerName = player.concat(" ").split(" ", 1)[0];
+        sendChat(
+            isError ? AWS_error : AWS_name,
+            `${playerName ? "/w " + playerName + " " : ""}${msg}`
+        );
+        if (isError)
+            log(AWS_log + (logMsg || msg) + " Error code " + code + ".");
     }
 });
