@@ -7,8 +7,8 @@ on("ready", function() {
     // ===========================================|Constants
     const AWS_name = "AWS";
     const AWS_state_name = "AUTOMATICWILDSHAPE";
-    const AWS_error = AWS_name+" ERROR";
-    const AWS_log = AWS_name+" - ";
+    const AWS_error = AWS_name + " ERROR";
+    const AWS_log = AWS_name + " - ";
 
     // Debug
     const AWS_debug = false;
@@ -174,7 +174,8 @@ on("ready", function() {
             _type: "attribute",
             name: "ws",
         });
-        if (attrs.length < 1) return toChat("There are no sheets in the wild shape list.", {
+        if (attrs.length < 1)
+            return toChat("There are no sheets in the wild shape list.", {
                 code: 21,
                 player: msg.who,
             });
@@ -190,7 +191,8 @@ on("ready", function() {
                 wsId: a,
             };
         });
-        if (msg.selected.length === 1) return listToChat(msg, filterList(msg, beasts));
+        if (msg.selected.length === 1)
+            return listToChat(msg, filterList(msg, beasts));
         return listToChat(msg, beasts);
     }
 
@@ -207,7 +209,8 @@ on("ready", function() {
         let druid = getDetails(char);
         if (!druid) return toChat("No attrs from char.", { code: 32 });
         if (druid.level < 2) return toChat("Lvl too low.", { code: 33 });
-        Object.assign(druid, getCR(druid)); // adds `maxCr` and `filter` properties to the druid object
+        druid = { ...druid, ...getCR(druid) }; // adds `maxCr` and `filter` properties to the druid object
+        // TODO continue here.
     }
 
     /**
@@ -231,7 +234,8 @@ on("ready", function() {
         // if the class was not in the default attribute we need to check the 4 multiclasses
         else {
             for (let i = 1; i <= 4; i++) {
-                if (getAttrByName(char.id, `multiclass${i}_flag`) !== 1) continue;
+                if (getAttrByName(char.id, `multiclass${i}_flag`) !== 1)
+                    continue;
                 if (
                     getAttrByName(char.id, `multiclass${i}`)?.toLowerCase() ===
                     "druid"
@@ -323,8 +327,15 @@ on("ready", function() {
         */
         beasts.sort((a, b) => a.name - b.name);
         if (cr) beasts.sort((a, b) => a.crSort - b.crSort);
-        beasts.reduce((a, b) => a + `{{${b.name}=${cr ? b.cr : ""} ${remove ? `[X](!<br>aws list remove ${ b.name })` : ""}}}`, `&{template:default}{{Name=**${tableName}**}}` );
-        return toChat(beasts, {player: msg.who});
+        beasts.reduce(
+            (a, b) =>
+                a +
+                `{{${b.name}=${cr ? b.cr : ""} ${
+                    remove ? `[X](!<br>aws list remove ${b.name})` : ""
+                }}}`,
+            `&{template:default}{{Name=**${tableName}**}}`
+        );
+        return toChat(beasts, { player: msg.who });
     }
 
     const toChat = function (
@@ -341,30 +352,51 @@ on("ready", function() {
             log(AWS_log + (logMsg || msg) + " Error code " + code + ".");
     };
 
-    /* ====================================================|Old code below this point|==================================================== */
+    /* Old code below this point|====================================================| */
 
     function AutomaticWildShape(msg, token, char) {
-        if (AWS_debug) {log("AWS Main function called.")};
+        if (AWS_debug) {
+            log("AWS Main function called.");
+        }
 
         // message split-up
-        let parts = msg.content.split(' ', 2); // split incoming message into 2 parts
+        let parts = msg.content.split(" ", 2); // split incoming message into 2 parts
 
         // objects setup
-        let playerName = msg.who.substring(0, (msg.who+' ').indexOf(' ')); // player's first name
+        let playerName = msg.who.substring(0, (msg.who + " ").indexOf(" ")); // player's first name
         let charName;
         let charFirstName;
-        if (msg.content.split(' ')[1] !== 'list' && msg.content.split(' ')[1] !== 'populate' && msg.content.split(' ', 3)[2] === undefined) {
-            if (token.get("represents") === undefined)  { // if token does not represent a character sheet.
-                sendChat(AWS_error, "/w "+playerName+" The selected token does not represent a character sheet. Error code 5.");
-                log(AWS_debug+" Found that token.get('represents') returned undefined. Error code 5.");
+        if (
+            msg.content.split(" ")[1] !== "list" &&
+            msg.content.split(" ")[1] !== "populate" &&
+            msg.content.split(" ", 3)[2] === undefined
+        ) {
+            if (token.get("represents") === undefined) {
+                // if token does not represent a character sheet.
+                sendChat(
+                    AWS_error,
+                    "/w " +
+                        playerName +
+                        " The selected token does not represent a character sheet. Error code 5."
+                );
+                log(
+                    AWS_debug +
+                        " Found that token.get('represents') returned undefined. Error code 5."
+                );
                 return;
             } // TODO - Let tokens with no sheet transform as per this api
             charName = char.get("name");
-            charFirstName = charName.substring(0, (charName+" ").indexOf(" "));
+            charFirstName = charName.substring(
+                0,
+                (charName + " ").indexOf(" ")
+            );
         }
 
         // override check
-        if (getAttrByName(char.id, 'aws_override') == 1 && getAttrByName(char.id, 'npc') != 1) {
+        if (
+            getAttrByName(char.id, "aws_override") == 1 &&
+            getAttrByName(char.id, "npc") != 1
+        ) {
             sendChat(AWS_name, `/w gm ---**PLAYER IS USING AWS OVERRIDE**---`);
         }
 
@@ -374,121 +406,219 @@ on("ready", function() {
 
         // read message, filter actions based on content
         log(`Got to command filter.`);
-        if (parts[1]) { // if there is more than 1 part
+        if (parts[1]) {
+            // if there is more than 1 part
             switch (parts[1]) {
-                case 'end':
+                case "end":
                     revert(playerName, token);
                     break;
 
-                case 'add':
+                case "add":
                     addBeast(msg, playerName);
                     break;
 
-                case 'remove':
+                case "remove":
                     removeBeast(msg, playerName);
                     break;
 
-                case 'list':
+                case "list":
                     listBeasts(beastList, playerName);
                     break;
 
-                case 'populate':
+                case "populate":
                     populate(playerName);
                     break;
 
-                default: // if part 2 is likely a beast name, check name against the beastList. If found, transform.
-                    parts[1] = msg.content.replace(parts[0]+' ', ''); // make parts[1] into a string of that beast's name
+                default:
+                    // if part 2 is likely a beast name, check name against the beastList. If found, transform.
+                    parts[1] = msg.content.replace(parts[0] + " ", ""); // make parts[1] into a string of that beast's name
                     let msgBeast;
-                    if (findObjs({_type: 'character', name: parts[1]}, {caseInsensitive: true})[0] !== undefined) { // if a sheet is grabbed when name is filter
-                        msgBeast = findObjs({_type: 'character', name: parts[1]}, {caseInsensitive: true})[0]; // get id of beast by name
-                        let charLevel = getDruid(char, playerName, 'level');
-                        let charSubclass = getDruid(char, playerName, 'subclass');
+                    if (
+                        findObjs(
+                            { _type: "character", name: parts[1] },
+                            { caseInsensitive: true }
+                        )[0] !== undefined
+                    ) {
+                        // if a sheet is grabbed when name is filter
+                        msgBeast = findObjs(
+                            { _type: "character", name: parts[1] },
+                            { caseInsensitive: true }
+                        )[0]; // get id of beast by name
+                        let charLevel = getDruid(char, playerName, "level");
+                        let charSubclass = getDruid(
+                            char,
+                            playerName,
+                            "subclass"
+                        );
                         let charFilter;
                         let beastFilter;
-                        if (charSubclass && charLevel){
-                            charFilter = getCRlimit(char, charLevel, charSubclass, 'filter');// get char crFilter
-                            beastFilter = getBeastCR(msgBeast.id, 'filter'); // get beast crFilter
+                        if (charSubclass && charLevel) {
+                            charFilter = getCRlimit(
+                                char,
+                                charLevel,
+                                charSubclass,
+                                "filter"
+                            ); // get char crFilter
+                            beastFilter = getBeastCR(msgBeast.id, "filter"); // get beast crFilter
                         } else {
                             return;
                         }
-                        if (beastList.filter(beast => beast.id == msgBeast.id)[0] !== undefined) { // if the beast's ID is in the list of WS beast's IDs and the character is a druid of high enough level
-                            if (beastFilter <= charFilter) { // if player filter is more than or equal to beast filter
+                        if (
+                            beastList.filter(
+                                (beast) => beast.id == msgBeast.id
+                            )[0] !== undefined
+                        ) {
+                            // if the beast's ID is in the list of WS beast's IDs and the character is a druid of high enough level
+                            if (beastFilter <= charFilter) {
+                                // if player filter is more than or equal to beast filter
                                 transform(playerName, token, char, msgBeast.id); // activate transform function and send it beast ID
                             } else {
-                                sendChat(AWS_error, `/w `+playerName+` Your level is too low to transform into a '`+parts[1]+`'. Error code 44.`);
-                                log(`Your level is too low to transform into a '`+parts[1]+`'. Error code 44.`);
+                                sendChat(
+                                    AWS_error,
+                                    `/w ` +
+                                        playerName +
+                                        ` Your level is too low to transform into a '` +
+                                        parts[1] +
+                                        `'. Error code 44.`
+                                );
+                                log(
+                                    `Your level is too low to transform into a '` +
+                                        parts[1] +
+                                        `'. Error code 44.`
+                                );
                                 return;
                             }
                         } else {
-                            sendChat(AWS_error, `/w `+playerName+` Could not find beast '`+parts[1]+`' in BeastList. Add that beast by using the AWSadd command on its token. Error code 6.`);
-                            log(`Could not find creature '`+parts[1]+`' in BeastList. Error code 6.`);
+                            sendChat(
+                                AWS_error,
+                                `/w ` +
+                                    playerName +
+                                    ` Could not find beast '` +
+                                    parts[1] +
+                                    `' in BeastList. Add that beast by using the AWSadd command on its token. Error code 6.`
+                            );
+                            log(
+                                `Could not find creature '` +
+                                    parts[1] +
+                                    `' in BeastList. Error code 6.`
+                            );
                             return;
                         }
                     } else {
-                        sendChat(AWS_error, `/w `+playerName+` Could not find beast '`+parts[1]+`' in Journal. Error code 35.`);
-                        log(`Could not find creature '`+parts[1]+`' in Journal. Error code 35.`);
+                        sendChat(
+                            AWS_error,
+                            `/w ` +
+                                playerName +
+                                ` Could not find beast '` +
+                                parts[1] +
+                                `' in Journal. Error code 35.`
+                        );
+                        log(
+                            `Could not find creature '` +
+                                parts[1] +
+                                `' in Journal. Error code 35.`
+                        );
                         return;
                     }
                     break;
             }
-        } else { // check class & level and post filtered wild shape options to chat
+        } else {
+            // check class & level and post filtered wild shape options to chat
             //debug
-            if (AWS_debug) {log(AWS_log+"Reached beastListToChat() function caller.")}
+            if (AWS_debug) {
+                log(AWS_log + "Reached beastListToChat() function caller.");
+            }
 
-            let charLevel = getDruid(char, playerName, 'level');
-            if (!charLevel) { // stop here if they didn't pass druid checks.
+            let charLevel = getDruid(char, playerName, "level");
+            if (!charLevel) {
+                // stop here if they didn't pass druid checks.
                 return;
             }
-            let charSubclass = getDruid(char, playerName, 'subclass');
-            beastListToChat(beastList, char, charFirstName, charLevel, charSubclass, playerName);
+            let charSubclass = getDruid(char, playerName, "subclass");
+            beastListToChat(
+                beastList,
+                char,
+                charFirstName,
+                charLevel,
+                charSubclass,
+                playerName
+            );
         }
     }
 
     // --- FUNCTIONS ---
     function makeBeastList(msg) {
         //debug
-        if (AWS_debug) {log(AWS_log+"makeBeastList() function called.")};
+        if (AWS_debug) {
+            log(AWS_log + "makeBeastList() function called.");
+        }
         let x = 1;
 
         // compile array of beast names based on "ws" attribute existence
         let beastArray = [];
         let entry = 0;
-        _.each(findObjs({_type: "character"}), function(sheet) { // for every object of type character in game
+        _.each(findObjs({ _type: "character" }), function (sheet) {
+            // for every object of type character in game
             //debug
-            if (AWS_debug) {log("Sheet "+x+" ID: "+sheet.id+" | Sheet "+x+" name: "+sheet.get("name"))};
+            if (AWS_debug) {
+                log(
+                    "Sheet " +
+                        x +
+                        " ID: " +
+                        sheet.id +
+                        " | Sheet " +
+                        x +
+                        " name: " +
+                        sheet.get("name")
+                );
+            }
 
-            if (findObjs({ // if the attribute "ws" exists
-                _characterid: sheet.id,
-                _type: "attribute",
-                name: "ws"
-            }, {caseInsensitive: true})[0] !== undefined) {
+            if (
+                findObjs(
+                    {
+                        // if the attribute "ws" exists
+                        _characterid: sheet.id,
+                        _type: "attribute",
+                        name: "ws",
+                    },
+                    { caseInsensitive: true }
+                )[0] !== undefined
+            ) {
                 //debug
-                log(AWS_log+"Accepted Sheet Name: "+sheet.get("name")+" | Accepted Sheet ID: "+sheet.id+" | Accepted Sheet WS Attr Val: "+getAttrByName(sheet.id, "ws"));
+                log(
+                    AWS_log +
+                        "Accepted Sheet Name: " +
+                        sheet.get("name") +
+                        " | Accepted Sheet ID: " +
+                        sheet.id +
+                        " | Accepted Sheet WS Attr Val: " +
+                        getAttrByName(sheet.id, "ws")
+                );
 
                 let beast = {
                     id: sheet.id,
-                    name: sheet.get('name'),
-                    cr: getBeastCR(sheet.id, 'cr'),
-                    filter: getBeastCR(sheet.id, 'filter'),
-                    sheet: sheet
-                }
+                    name: sheet.get("name"),
+                    cr: getBeastCR(sheet.id, "cr"),
+                    filter: getBeastCR(sheet.id, "filter"),
+                    sheet: sheet,
+                };
                 beastArray.push(beast);
                 entry++;
             }
 
             //debug
             x++;
-        })
+        });
         //debug
         if (AWS_debug) {
             for (let i = 0; i < beastArray.length; i++) {
-                log(`beastArray[`+i+`].name: `+beastArray[i].name)
+                log(`beastArray[` + i + `].name: ` + beastArray[i].name);
             }
         }
 
         //sort
-        log('hit array sorter')
-        beastArray.sort((a,b) => (a.name > b.name) ? 1 : -1);
+        log("hit array sorter");
+        beastArray.sort((a, b) => (a.name > b.name ? 1 : -1));
         beastArray.sort((a, b) => a.filter - b.filter);
 
         // if no ids, return error. else return ids.
@@ -500,266 +630,523 @@ on("ready", function() {
         }
     }
 
-    function beastListToChat(beastList, char, charName, charLevel, charSubclass, playerName) {
+    function beastListToChat(
+        beastList,
+        char,
+        charName,
+        charLevel,
+        charSubclass,
+        playerName
+    ) {
         //debug
-        if (AWS_debug) {log(AWS_log+"beastListToChat() function called.")};
+        if (AWS_debug) {
+            log(AWS_log + "beastListToChat() function called.");
+        }
 
-        let crFilter = getCRlimit(char, charLevel, charSubclass, 'filter');
-        let crLimit = getCRlimit(char, charLevel, charSubclass, 'limit');
+        let crFilter = getCRlimit(char, charLevel, charSubclass, "filter");
+        let crLimit = getCRlimit(char, charLevel, charSubclass, "limit");
 
-        if (!crFilter || crFilter == undefined || !crLimit || crLimit == undefined) {
-            sendChat(AWS_name, `/w `+playerName+` No Druid class found. Error code 39.`);
-            log(AWS_log+`No Druid class found. Error code 39.`)
+        if (
+            !crFilter ||
+            crFilter == undefined ||
+            !crLimit ||
+            crLimit == undefined
+        ) {
+            sendChat(
+                AWS_name,
+                `/w ` + playerName + ` No Druid class found. Error code 39.`
+            );
+            log(AWS_log + `No Druid class found. Error code 39.`);
             return;
-
         } else {
             // Cull beastList by CR
             let finalBeasts = [];
-            _.each(beastList, function(beast) {
-                if (!isNaN(beast.filter) && beast.filter <= crFilter) {finalBeasts.push(beast)};
+            _.each(beastList, function (beast) {
+                if (!isNaN(beast.filter) && beast.filter <= crFilter) {
+                    finalBeasts.push(beast);
+                }
                 // if the value of beast's CR is a number & less than the PC's crLimit, add to finalBeasts array
-                log(`beastName: `+getAttrByName(beast.id, 'npc_name')+` | beastCR: `+beast.cr+` | beastFilter: `+beast.filter+` | crFilter: `+crFilter+` | beastFilter <= crFilter: `+(+beast.filter <= +crFilter))
+                log(
+                    `beastName: ` +
+                        getAttrByName(beast.id, "npc_name") +
+                        ` | beastCR: ` +
+                        beast.cr +
+                        ` | beastFilter: ` +
+                        beast.filter +
+                        ` | crFilter: ` +
+                        crFilter +
+                        ` | beastFilter <= crFilter: ` +
+                        (+beast.filter <= +crFilter)
+                );
             });
 
             //make sure at least one beast got through check
             if (finalBeasts[0] === undefined) {
-                sendChat(AWS_name, `/w `+playerName+` No Beasts in BeastList of appropiate CR. Error code 20.`);
-                log(AWS_log+`No Beasts in BeastList of appropiate CR. Error code 20.`)
+                sendChat(
+                    AWS_name,
+                    `/w ` +
+                        playerName +
+                        ` No Beasts in BeastList of appropiate CR. Error code 20.`
+                );
+                log(
+                    AWS_log +
+                        `No Beasts in BeastList of appropiate CR. Error code 20.`
+                );
                 return;
             }
 
             // Compose Chat Message
-            let outputList = " &{template:default} {{name=SELECT WILD SHAPE}}"
+            let outputList = " &{template:default} {{name=SELECT WILD SHAPE}}";
             let i = 0;
-            _.each(finalBeasts, function(beast) {
+            _.each(finalBeasts, function (beast) {
                 beast.name = getAttrByName(beast.id, "npc_name");
-                beast.cr = getAttrByName(beast.id, 'npc_challenge');
+                beast.cr = getAttrByName(beast.id, "npc_challenge");
 
                 if (beast.name !== undefined) {
                     //debug
-                    if (AWS_debug) {log(AWS_log+'Beast '+(i+1)+', Name: '+beast.name+', added to chat output.')};
+                    if (AWS_debug) {
+                        log(
+                            AWS_log +
+                                "Beast " +
+                                (i + 1) +
+                                ", Name: " +
+                                beast.name +
+                                ", added to chat output."
+                        );
+                    }
 
-                    if (i % 2 === 0) { // if first half of macro
-                        outputList = outputList.concat(" {{["+beast.name+" (CR"+beast.cr+")](!<br>aws "+beast.name+") = ");
-                    } else { // if second half of macro
-                        outputList = outputList.concat("["+beast.name+" (CR"+beast.cr+")](!<br>aws "+beast.name+")}}");
+                    if (i % 2 === 0) {
+                        // if first half of macro
+                        outputList = outputList.concat(
+                            " {{[" +
+                                beast.name +
+                                " (CR" +
+                                beast.cr +
+                                ")](!<br>aws " +
+                                beast.name +
+                                ") = "
+                        );
+                    } else {
+                        // if second half of macro
+                        outputList = outputList.concat(
+                            "[" +
+                                beast.name +
+                                " (CR" +
+                                beast.cr +
+                                ")](!<br>aws " +
+                                beast.name +
+                                ")}}"
+                        );
                     }
                     i++;
-                    if (i === finalBeasts.length && i % 2 !== 0) { // if final entry just went through on first part of macro
+                    if (i === finalBeasts.length && i % 2 !== 0) {
+                        // if final entry just went through on first part of macro
                         outputList = outputList.concat("}}"); // close macro
-                    };
+                    }
                 } else {
-                    sendChat(AWS_error, "No usable name found for wild shape sheet "+(i+1)+". Error code 12.");
-                    log(AWS_log+"No usable name found for wild shape sheet "+(i+1)+". Error code 12.");
+                    sendChat(
+                        AWS_error,
+                        "No usable name found for wild shape sheet " +
+                            (i + 1) +
+                            ". Error code 12."
+                    );
+                    log(
+                        AWS_log +
+                            "No usable name found for wild shape sheet " +
+                            (i + 1) +
+                            ". Error code 12."
+                    );
                     return;
                 }
             });
 
             // Chat Output Part 1, CR limit and intro
-            sendChat(AWS_name, "/w "+playerName+" Please select a beast of **CR "+crLimit+" or lower** from the following list:");
+            sendChat(
+                AWS_name,
+                "/w " +
+                    playerName +
+                    " Please select a beast of **CR " +
+                    crLimit +
+                    " or lower** from the following list:"
+            );
 
             // Chat Output Part 2, Beast List
-            sendChat(AWS_name, "/w "+playerName + outputList);
+            sendChat(AWS_name, "/w " + playerName + outputList);
 
-            log(AWS_log+`List of creatures posted for character `+charName)
+            log(AWS_log + `List of creatures posted for character ` + charName);
         }
     }
 
     function transform(playerName, pcToken, pcSheet, beastID, pcID) {
         //debug
-        if (AWS_debug) {log(AWS_log+"transform() function called. With "+getObj('character', beastID).get('name')+' as beast.')};
+        if (AWS_debug) {
+            log(
+                AWS_log +
+                    "transform() function called. With " +
+                    getObj("character", beastID).get("name") +
+                    " as beast."
+            );
+        }
 
-        let beast = getObj('character', beastID);
-        let campaign = getObj('campaign', 'root');
-        let playerPageID = campaign.get('playerpageid');
+        let beast = getObj("character", beastID);
+        let campaign = getObj("campaign", "root");
+        let playerPageID = campaign.get("playerpageid");
 
         //create new beast
-        let wildSheet = createObj('character', {name: pcSheet.get(`name`)+` as `+beast.get(`name`), avatar: beast.get(`avatar`)});
-        sendChat(AWS_name, pcSheet.get('name')+` wild-shaped into a `+beast.get('name')+`.`);
-        let beastAttrs = findObjs({_type: 'attribute', _characterid: beast.id});
+        let wildSheet = createObj("character", {
+            name: pcSheet.get(`name`) + ` as ` + beast.get(`name`),
+            avatar: beast.get(`avatar`),
+        });
+        sendChat(
+            AWS_name,
+            pcSheet.get("name") +
+                ` wild-shaped into a ` +
+                beast.get("name") +
+                `.`
+        );
+        let beastAttrs = findObjs({
+            _type: "attribute",
+            _characterid: beast.id,
+        });
 
         if (beastAttrs[0] !== undefined) {
             for (let i = 0; i < beastAttrs.length; i++) {
                 //for ever attribute on old beast sheet, duplicate onto new beast sheet
-                createObj('attribute', {
+                createObj("attribute", {
                     _characterid: wildSheet.id,
-                    name: beastAttrs[i].get('name'),
-                    current: beastAttrs[i].get('current'),
-                    max: beastAttrs[i].get('max')
+                    name: beastAttrs[i].get("name"),
+                    current: beastAttrs[i].get("current"),
+                    max: beastAttrs[i].get("max"),
                 });
             }
 
             // create '!aws end' ability
-            createObj('ability', {
+            createObj("ability", {
                 _characterid: wildSheet.id,
                 name: `~EndWildShape`,
                 action: `!aws end`,
-                istokenaction: true
-            })
+                istokenaction: true,
+            });
 
             // remove 'ws' attribute
-            findObjs({_type: 'attribute', _characterid: wildSheet.id, name: 'ws'})[0].remove();
+            findObjs({
+                _type: "attribute",
+                _characterid: wildSheet.id,
+                name: "ws",
+            })[0].remove();
 
             // make player-controlled
-            wildSheet.set('controlledby', pcSheet.get('controlledby'));
+            wildSheet.set("controlledby", pcSheet.get("controlledby"));
 
             // set int, wis, and cha
-            setAttr('intelligence');
-            setAttr('wisdom');
-            setAttr('charisma');
+            setAttr("intelligence");
+            setAttr("wisdom");
+            setAttr("charisma");
 
-            function setAttr (attr) {
-                findObjs({_type: 'attribute', _characterid: wildSheet.id, name: attr})[0].set('current', getAttrByName(pcSheet.id, attr));
-                findObjs({_type: 'attribute', _characterid: wildSheet.id, name: attr+'_mod'})[0].set('current', getAttrByName(pcSheet.id, attr+'_mod'));
+            function setAttr(attr) {
+                findObjs({
+                    _type: "attribute",
+                    _characterid: wildSheet.id,
+                    name: attr,
+                })[0].set("current", getAttrByName(pcSheet.id, attr));
+                findObjs({
+                    _type: "attribute",
+                    _characterid: wildSheet.id,
+                    name: attr + "_mod",
+                })[0].set("current", getAttrByName(pcSheet.id, attr + "_mod"));
             }
 
             // list of all skill attributes
             let allSkills = [
-                'strength_save', 'dexterity_save', 'constitution_save', 'intelligence_save', 'wisdom_save', 'charisma_save', 'athletics', 'acrobatics', 'sleight_of_hand',
-                'stealth', 'arcana', 'history', 'investigation', 'nature', 'religion', 'animal_handling', 'insight', 'medicine', 'perception', 'survival',
-                'deception', 'intimidation', 'performance', 'persuasion'
+                "strength_save",
+                "dexterity_save",
+                "constitution_save",
+                "intelligence_save",
+                "wisdom_save",
+                "charisma_save",
+                "athletics",
+                "acrobatics",
+                "sleight_of_hand",
+                "stealth",
+                "arcana",
+                "history",
+                "investigation",
+                "nature",
+                "religion",
+                "animal_handling",
+                "insight",
+                "medicine",
+                "perception",
+                "survival",
+                "deception",
+                "intimidation",
+                "performance",
+                "persuasion",
             ];
 
             // go through the list of all skill attributes and only keep attributes that the player is proficient in
             let profSkills = [];
             for (let i = 0; i < allSkills.length; i++) {
-                if (getAttrByName(pcSheet.id, allSkills[i]+'_prof') !== undefined && getAttrByName(pcSheet.id, allSkills[i]+'_prof') != 0) {
+                if (
+                    getAttrByName(pcSheet.id, allSkills[i] + "_prof") !==
+                        undefined &&
+                    getAttrByName(pcSheet.id, allSkills[i] + "_prof") != 0
+                ) {
                     profSkills.push(allSkills[i]);
                 }
             }
 
             // set skill categories by attribute
-            let strSkills = ['strength_save', 'athletics'];
-            let dexSkills = ['dexterity_save', 'acrobatics', 'sleight_of_hand', 'stealth'];
-            let conSkills = ['constitution_save'];
-            let intSkills = ['intelligence_save', 'arcana', 'history', 'investigation', 'nature', 'religion'];
-            let wisSkills = ['wisdom_save', 'animal_handling','insight', 'medicine', 'perception', 'survival'];
-            let chaSkills = ['charisma_save', 'deception', 'intimidation', 'performance', 'persuasion'];
+            let strSkills = ["strength_save", "athletics"];
+            let dexSkills = [
+                "dexterity_save",
+                "acrobatics",
+                "sleight_of_hand",
+                "stealth",
+            ];
+            let conSkills = ["constitution_save"];
+            let intSkills = [
+                "intelligence_save",
+                "arcana",
+                "history",
+                "investigation",
+                "nature",
+                "religion",
+            ];
+            let wisSkills = [
+                "wisdom_save",
+                "animal_handling",
+                "insight",
+                "medicine",
+                "perception",
+                "survival",
+            ];
+            let chaSkills = [
+                "charisma_save",
+                "deception",
+                "intimidation",
+                "performance",
+                "persuasion",
+            ];
 
             let attr;
             // for every skill the character is proficient in,
             for (let i = 0; i < profSkills.length; i++) {
-
                 // find the relevant attribute and set the attribute as 'attr'
                 if (strSkills.indexOf(profSkills[i]) != -1) {
-                    attr = 'strength_mod';
+                    attr = "strength_mod";
                 } else if (dexSkills.indexOf(profSkills[i]) != -1) {
-                    attr = 'dexterity_mod';
+                    attr = "dexterity_mod";
                 } else if (conSkills.indexOf(profSkills[i]) != -1) {
-                    attr = 'constitution_mod';
+                    attr = "constitution_mod";
                 } else if (intSkills.indexOf(profSkills[i]) != -1) {
-                    attr = 'intelligence_mod';
+                    attr = "intelligence_mod";
                 } else if (wisSkills.indexOf(profSkills[i]) != -1) {
-                    attr = 'wisdom_mod';
+                    attr = "wisdom_mod";
                 } else if (chaSkills.indexOf(profSkills[i]) != -1) {
-                    attr = 'charisma_mod';
+                    attr = "charisma_mod";
                 } else {
-                    sendChat('', 'ERROR, skill not found in skill arrays. Error code 18.');
-                    log ('ERROR, skill not found in skill arrays. Error code 18.');
+                    sendChat(
+                        "",
+                        "ERROR, skill not found in skill arrays. Error code 18."
+                    );
+                    log(
+                        "ERROR, skill not found in skill arrays. Error code 18."
+                    );
                     return;
                 }
 
                 let beastAttrMod = getAttrByName(wildSheet.id, attr);
-                let skill = npcSave('npc_'+profSkills[i]);
+                let skill = npcSave("npc_" + profSkills[i]);
                 let skillBonus;
                 if (isNaN(getAttrByName(wildSheet.id, skill))) {
                     skillBonus = beastAttrMod;
                 } else {
                     skillBonus = getAttrByName(wildSheet.id, skill);
                 }
-                let charPB = getAttrByName(pcSheet.id, 'pb');
+                let charPB = getAttrByName(pcSheet.id, "pb");
                 let beastPB = skillBonus - beastAttrMod;
 
                 // if (character's proficiency bonus for skill) is higher than (beast's proficiency bonus for skill)
                 if (beastPB === NaN || charPB > beastPB) {
                     // use the character's prof bonus + beast's attr bonus
-                    findObjs({_type: 'attribute', _characterid: wildSheet.id, name: skill})[0].set('current', +charPB + +beastAttrMod);
+                    findObjs({
+                        _type: "attribute",
+                        _characterid: wildSheet.id,
+                        name: skill,
+                    })[0].set("current", +charPB + +beastAttrMod);
                     // make that skill visible on beast sheet
-                    findObjs({_type: 'attribute', _characterid: wildSheet.id, name: skill+'_flag'})[0].set('current', 1);
+                    findObjs({
+                        _type: "attribute",
+                        _characterid: wildSheet.id,
+                        name: skill + "_flag",
+                    })[0].set("current", 1);
                 }
 
                 // Change saving throws to npc styled saving throws ('dexterity_save' => 'dex_save')
                 function npcSave(attr) {
-
                     if (attr.indexOf("_save") != -1) {
-                        attr = attr.replace('ength','');
-                        attr = attr.replace('terity','');
-                        attr = attr.replace('stitution','');
-                        attr = attr.replace('elligence','');
-                        attr = attr.replace('dom','');
-                        attr = attr.replace('risma','');
+                        attr = attr.replace("ength", "");
+                        attr = attr.replace("terity", "");
+                        attr = attr.replace("stitution", "");
+                        attr = attr.replace("elligence", "");
+                        attr = attr.replace("dom", "");
+                        attr = attr.replace("risma", "");
                     }
                     return attr;
                 }
             }
-
         } else {
-            sendChat(AWS_name, `/w `+playerName+` No attributes found for beast sheet. Error code 17.`)
-            log(AWS_log+'No attributes found for beast sheet. Error code 17.')
+            sendChat(
+                AWS_name,
+                `/w ` +
+                    playerName +
+                    ` No attributes found for beast sheet. Error code 17.`
+            );
+            log(
+                AWS_log + "No attributes found for beast sheet. Error code 17."
+            );
             return;
         }
 
-        beast.get('_defaulttoken', function(o) {
-
-            if (o == 'null') {
-                sendChat(AWS_name, '/w '+playerName+' ERROR: Beast sheet has no default token. Error code 21.');
-                sendChat(AWS_name, `/w `+playerName+` Character '`+wildSheet.get('name')+`' deleted.`);
+        beast.get("_defaulttoken", function (o) {
+            if (o == "null") {
+                sendChat(
+                    AWS_name,
+                    "/w " +
+                        playerName +
+                        " ERROR: Beast sheet has no default token. Error code 21."
+                );
+                sendChat(
+                    AWS_name,
+                    `/w ` +
+                        playerName +
+                        ` Character '` +
+                        wildSheet.get("name") +
+                        `' deleted.`
+                );
                 wildSheet.remove();
-                log(AWS_log+'ERROR: Beast sheet has no default token. Error code 21.');
+                log(
+                    AWS_log +
+                        "ERROR: Beast sheet has no default token. Error code 21."
+                );
                 return;
-
             } else {
                 let obj = JSON.parse(o);
 
-                if (playerPageID === undefined || pcToken.get('name') === undefined || beast.get('name') === undefined) {
-                    sendChat(AWS_error, `/w `+playerName+` Some parts of WildShape default token were incorrectly prepared. Try re-setting default token and ensuring both character token and wild-shape token have names set. Error code 24.`);
-                    sendChat(AWS_name, `/w `+playerName+` Character '`+wildSheet.get('name')+`' deleted.`);
+                if (
+                    playerPageID === undefined ||
+                    pcToken.get("name") === undefined ||
+                    beast.get("name") === undefined
+                ) {
+                    sendChat(
+                        AWS_error,
+                        `/w ` +
+                            playerName +
+                            ` Some parts of WildShape default token were incorrectly prepared. Try re-setting default token and ensuring both character token and wild-shape token have names set. Error code 24.`
+                    );
+                    sendChat(
+                        AWS_name,
+                        `/w ` +
+                            playerName +
+                            ` Character '` +
+                            wildSheet.get("name") +
+                            `' deleted.`
+                    );
                     wildSheet.remove();
-                    log(AWS_log+`Error code 24.`);
+                    log(AWS_log + `Error code 24.`);
                     return;
-
                 } else {
                     //token setup
                     obj._pageid = playerPageID;
-                    obj.name = pcToken.get('name')+' ('+beast.get('name')+')';
-                    obj.layer = pcToken.get('layer');
-                    obj.left = pcToken.get('left');
-                    obj.top = pcToken.get('top');
+                    obj.name =
+                        pcToken.get("name") + " (" + beast.get("name") + ")";
+                    obj.layer = pcToken.get("layer");
+                    obj.left = pcToken.get("left");
+                    obj.top = pcToken.get("top");
                     if (AWS_hpbar <= 3 && AWS_hpbar >= 1) {
-                        if (getAttrByName(beastID, 'hp', 'max')) {
-                            obj[`bar${AWS_hpbar}_max`] = getAttrByName(beastID, 'hp', 'max');
-                            obj[`bar${AWS_hpbar}_value`] = obj[`bar${AWS_hpbar}_max`];
+                        if (getAttrByName(beastID, "hp", "max")) {
+                            obj[`bar${AWS_hpbar}_max`] = getAttrByName(
+                                beastID,
+                                "hp",
+                                "max"
+                            );
+                            obj[`bar${AWS_hpbar}_value`] =
+                                obj[`bar${AWS_hpbar}_max`];
                         } else if (obj[`bar${AWS_hpbar}_max`]) {
-                            obj[`bar${AWS_hpbar}_value`] = obj[`bar${AWS_hpbar}_max`];
+                            obj[`bar${AWS_hpbar}_value`] =
+                                obj[`bar${AWS_hpbar}_max`];
                         } else {
-                            sendChat(AWS_error, `/w `+playerName+` Some parts of WildShape default token were incorrectly prepared. Try re-setting default token and ensuring both character token and wild-shape token have names set. Error code 25.`);
-                            sendChat(AWS_name, `/w `+playerName+` Character '`+wildSheet.get('name')+`' deleted.`);
+                            sendChat(
+                                AWS_error,
+                                `/w ` +
+                                    playerName +
+                                    ` Some parts of WildShape default token were incorrectly prepared. Try re-setting default token and ensuring both character token and wild-shape token have names set. Error code 25.`
+                            );
+                            sendChat(
+                                AWS_name,
+                                `/w ` +
+                                    playerName +
+                                    ` Character '` +
+                                    wildSheet.get("name") +
+                                    `' deleted.`
+                            );
                             wildSheet.remove();
-                            log(AWS_log+`Error code 25.`);
+                            log(AWS_log + `Error code 25.`);
                             return;
                         }
                     } else {
-                        sendChat(AWS_error, `/w `+playerName+` Variable 'aws_hpbar' incorrectly set. Please see variables at the top of AutomaticWildShape API. Error code 26.`);
-                        sendChat(AWS_name, `/w `+playerName+` Character '`+wildSheet.get('name')+`' deleted.`);
+                        sendChat(
+                            AWS_error,
+                            `/w ` +
+                                playerName +
+                                ` Variable 'aws_hpbar' incorrectly set. Please see variables at the top of AutomaticWildShape API. Error code 26.`
+                        );
+                        sendChat(
+                            AWS_name,
+                            `/w ` +
+                                playerName +
+                                ` Character '` +
+                                wildSheet.get("name") +
+                                `' deleted.`
+                        );
                         wildSheet.remove();
-                        log(AWS_log+`Variable 'aws_hpbar' incorrectly set. Must be 1, 2, or 3. Error code 26.`);
+                        log(
+                            AWS_log +
+                                `Variable 'aws_hpbar' incorrectly set. Must be 1, 2, or 3. Error code 26.`
+                        );
                         return;
                     }
                     obj.represents = wildSheet.id;
 
                     //size setup
-                    if (getAttrByName(beast.id, 'npc_type').search(/tiny/i) != -1) {
-                        if (AWS_debug) {log(`Creature is tiny.`)}
-                        obj.height = pcToken.get('height') / 2;
-                        obj.width = pcToken.get('width') / 2;
-                    } else if (getAttrByName(beast.id, 'npc_type').search(/large/i) != -1) {
-                        if (AWS_debug) {log(`Creature is large.`)}
-                        obj.height = pcToken.get('height') * 2;
-                        obj.width = pcToken.get('width') * 2;
-                    } else if (getAttrByName(beast.id, 'npc_type').search(/huge/i) != -1) {
-                        if (AWS_debug) {log(`Creature is huge.`)}
-                        obj.height = pcToken.get('height') * 3;
-                        obj.width = pcToken.get('width') * 3;
+                    if (
+                        getAttrByName(beast.id, "npc_type").search(/tiny/i) !=
+                        -1
+                    ) {
+                        if (AWS_debug) {
+                            log(`Creature is tiny.`);
+                        }
+                        obj.height = pcToken.get("height") / 2;
+                        obj.width = pcToken.get("width") / 2;
+                    } else if (
+                        getAttrByName(beast.id, "npc_type").search(/large/i) !=
+                        -1
+                    ) {
+                        if (AWS_debug) {
+                            log(`Creature is large.`);
+                        }
+                        obj.height = pcToken.get("height") * 2;
+                        obj.width = pcToken.get("width") * 2;
+                    } else if (
+                        getAttrByName(beast.id, "npc_type").search(/huge/i) !=
+                        -1
+                    ) {
+                        if (AWS_debug) {
+                            log(`Creature is huge.`);
+                        }
+                        obj.height = pcToken.get("height") * 3;
+                        obj.width = pcToken.get("width") * 3;
                     }
 
                     //img setup
@@ -770,12 +1157,27 @@ on("ready", function() {
                     obj.imgsrc = img;
 
                     //place token
-                    let wildToken = createObj('graphic', obj);
+                    let wildToken = createObj("graphic", obj);
                     if (wildToken === undefined) {
-                        sendChat(AWS_error, '/w '+playerName+' Tokens must be uploaded for the AWS API to work. Error code 23.')
-                        sendChat(AWS_name, `/w `+playerName+` Character '`+wildSheet.get('name')+`' deleted.`);
+                        sendChat(
+                            AWS_error,
+                            "/w " +
+                                playerName +
+                                " Tokens must be uploaded for the AWS API to work. Error code 23."
+                        );
+                        sendChat(
+                            AWS_name,
+                            `/w ` +
+                                playerName +
+                                ` Character '` +
+                                wildSheet.get("name") +
+                                `' deleted.`
+                        );
                         wildSheet.remove();
-                        log(AWS_log+'Tokens must be uploaded for the AWS API to work. Error code 23.')
+                        log(
+                            AWS_log +
+                                "Tokens must be uploaded for the AWS API to work. Error code 23."
+                        );
                         return;
                     } else {
                         toFront(wildToken);
@@ -786,54 +1188,112 @@ on("ready", function() {
                     }
                 }
             }
-
         });
-    };
+    }
 
     function revert(playerName, token) {
         //debug
-        if (AWS_debug) {log(AWS_log+"revert() function called.")};
+        if (AWS_debug) {
+            log(AWS_log + "revert() function called.");
+        }
 
-        let ws = getObj('character', token.get('represents'));
-        let wsName = ws.get('name');
-        let campaign = getObj('campaign', 'root');
-        let playerPage = campaign.get('playerpageid');
-        let charName = wsName.replace(' as '+getAttrByName(ws.id, 'npc_name'), '');
+        let ws = getObj("character", token.get("represents"));
+        let wsName = ws.get("name");
+        let campaign = getObj("campaign", "root");
+        let playerPage = campaign.get("playerpageid");
+        let charName = wsName.replace(
+            " as " + getAttrByName(ws.id, "npc_name"),
+            ""
+        );
 
-        if (findObjs({_type: 'character', name: charName})[0] !== undefined) {
-            let char = findObjs({_type: 'character', name: charName})[0];
+        if (findObjs({ _type: "character", name: charName })[0] !== undefined) {
+            let char = findObjs({ _type: "character", name: charName })[0];
 
-            if(findObjs({_type: 'character', name: charName}).length > 1) {
-                sendChat(AWS_error, '/w '+playerName+' Multiple characters named '+charName+' found. Error code 34.');
-                log(AWS_log+'Multiple characters named '+charName+' found. Error code 34.');
+            if (findObjs({ _type: "character", name: charName }).length > 1) {
+                sendChat(
+                    AWS_error,
+                    "/w " +
+                        playerName +
+                        " Multiple characters named " +
+                        charName +
+                        " found. Error code 34."
+                );
+                log(
+                    AWS_log +
+                        "Multiple characters named " +
+                        charName +
+                        " found. Error code 34."
+                );
                 return;
-            } else if (wsName.search(' as '+getAttrByName(ws.id, 'npc_name')) === -1) {
-                sendChat(AWS_error, `/w `+playerName+` Character '`+charName+`' is not in Wild Shape. Error code 36.`);
-                log(AWS_log+`Character '`+charName+`' is not in Wild Shape. Error code 36.`);
+            } else if (
+                wsName.search(" as " + getAttrByName(ws.id, "npc_name")) === -1
+            ) {
+                sendChat(
+                    AWS_error,
+                    `/w ` +
+                        playerName +
+                        ` Character '` +
+                        charName +
+                        `' is not in Wild Shape. Error code 36.`
+                );
+                log(
+                    AWS_log +
+                        `Character '` +
+                        charName +
+                        `' is not in Wild Shape. Error code 36.`
+                );
                 return;
-            } else if (findObjs({_type: 'character', name: charName}).length < 1) {
-                sendChat(AWS_error, '/w '+playerName+' No characters named '+charName+' found. Error code 35.');
-                log(AWS_log+'No characters named '+charName+' found. Error code 35.');
+            } else if (
+                findObjs({ _type: "character", name: charName }).length < 1
+            ) {
+                sendChat(
+                    AWS_error,
+                    "/w " +
+                        playerName +
+                        " No characters named " +
+                        charName +
+                        " found. Error code 35."
+                );
+                log(
+                    AWS_log +
+                        "No characters named " +
+                        charName +
+                        " found. Error code 35."
+                );
                 return;
             }
 
             //place token
-            char.get('_defaulttoken', function(o) {
-
+            char.get("_defaulttoken", function (o) {
                 let obj = JSON.parse(o);
 
                 //token setup
                 obj._pageid = playerPage;
-                obj.layer = token.get('layer');
-                obj.left = token.get('left');
-                obj.top = token.get('top');
+                obj.layer = token.get("layer");
+                obj.left = token.get("left");
+                obj.top = token.get("top");
                 if (AWS_hpbar <= 3 && AWS_hpbar >= 1) {
-                    obj[`bar${AWS_hpbar}_value`] = getAttrByName(char.id, 'hp');
+                    obj[`bar${AWS_hpbar}_value`] = getAttrByName(char.id, "hp");
                 } else {
-                    sendChat(AWS_error, `/w `+playerName+` Variable 'aws_hpbar' incorrectly set. Please see variables at the top of AutomaticWildShape API. Error code 32.`);
-                    sendChat(AWS_name, `/w `+playerName+` Character '`+wildSheet.get('name')+`' deleted.`);
+                    sendChat(
+                        AWS_error,
+                        `/w ` +
+                            playerName +
+                            ` Variable 'aws_hpbar' incorrectly set. Please see variables at the top of AutomaticWildShape API. Error code 32.`
+                    );
+                    sendChat(
+                        AWS_name,
+                        `/w ` +
+                            playerName +
+                            ` Character '` +
+                            wildSheet.get("name") +
+                            `' deleted.`
+                    );
                     wildSheet.remove();
-                    log(AWS_log+`Variable 'aws_hpbar' incorrectly set. Must be 1, 2, or 3. Error code 32.`);
+                    log(
+                        AWS_log +
+                            `Variable 'aws_hpbar' incorrectly set. Must be 1, 2, or 3. Error code 32.`
+                    );
                     return;
                 }
 
@@ -844,23 +1304,29 @@ on("ready", function() {
                 img = img.replace("min.", "thumb.");
                 obj.imgsrc = img;
 
-                let charToken = createObj('graphic', obj);
+                let charToken = createObj("graphic", obj);
                 toFront(charToken);
 
-
                 //HP calc
-                let tokenHP = token.get('bar'+AWS_hpbar+'_value');
-                let charHP = getAttrByName(char.id, 'hp');
+                let tokenHP = token.get("bar" + AWS_hpbar + "_value");
+                let charHP = getAttrByName(char.id, "hp");
                 let newHP = +charHP;
-                let chatHP = '';
-                if (tokenHP < 0) { // if token HP is negative, apply it to char hp
+                let chatHP = "";
+                if (tokenHP < 0) {
+                    // if token HP is negative, apply it to char hp
                     newHP = +charHP + +tokenHP;
-                    chatHP = ` and they lost [[`+String(tokenHP).replace('-', '')+`]] hit points due to the damage they took in wild shape.`;
-                };
-                sendChat(AWS_name, charName+`'s wild shape ended`+chatHP+`.`);
+                    chatHP =
+                        ` and they lost [[` +
+                        String(tokenHP).replace("-", "") +
+                        `]] hit points due to the damage they took in wild shape.`;
+                }
+                sendChat(
+                    AWS_name,
+                    charName + `'s wild shape ended` + chatHP + `.`
+                );
 
-                setTimeout(function(){
-                    charToken.set('bar'+AWS_hpbar+'_value', newHP);
+                setTimeout(function () {
+                    charToken.set("bar" + AWS_hpbar + "_value", newHP);
                 }, 50);
 
                 //delete old token & sheet
@@ -868,94 +1334,257 @@ on("ready", function() {
                 token.remove();
             });
         } else {
-            sendChat(AWS_name, `/w `+playerName+` No characters found with name '`+charName+`'. Error code 19.`);
-            log(AWS_log+`No characters found with name '`+charName+`'. Error code 19.`);
+            sendChat(
+                AWS_name,
+                `/w ` +
+                    playerName +
+                    ` No characters found with name '` +
+                    charName +
+                    `'. Error code 19.`
+            );
+            log(
+                AWS_log +
+                    `No characters found with name '` +
+                    charName +
+                    `'. Error code 19.`
+            );
             return;
         }
     }
 
     function addBeast(msg, playerName) {
         //debug
-        if (AWS_debug) {log(AWS_log+"addBeast() function called.")};
+        if (AWS_debug) {
+            log(AWS_log + "addBeast() function called.");
+        }
 
-        _.each(msg.selected, function(obj) {
+        _.each(msg.selected, function (obj) {
             let beastToken = getObj(obj._type, obj._id);
-            let beast = getObj('character', beastToken.get('represents')) // TODO stop sheets getting added if they have no default token
+            let beast = getObj("character", beastToken.get("represents")); // TODO stop sheets getting added if they have no default token
 
-            if (getAttrByName(beast.id, 'ws') === undefined || getAttrByName(beast.id, 'ws') != 1) {
-                beast.get('_defaulttoken', function (o) {
-                    if (o == 'null') {sendChat(AWS_name, '/w '+playerName+' **WARNING: '+beast.get('name')+' (CR '+getAttrByName(beast.id, "npc_challenge")+') has no default token.**')}
+            if (
+                getAttrByName(beast.id, "ws") === undefined ||
+                getAttrByName(beast.id, "ws") != 1
+            ) {
+                beast.get("_defaulttoken", function (o) {
+                    if (o == "null") {
+                        sendChat(
+                            AWS_name,
+                            "/w " +
+                                playerName +
+                                " **WARNING: " +
+                                beast.get("name") +
+                                " (CR " +
+                                getAttrByName(beast.id, "npc_challenge") +
+                                ") has no default token.**"
+                        );
+                    }
                     createObj("attribute", {
                         _characterid: beast.id,
-                        name: 'ws',
-                        current: '1'
+                        name: "ws",
+                        current: "1",
                     });
-                    sendChat(AWS_name, '/w '+playerName+' '+beast.get('name')+' (CR '+getAttrByName(beast.id, "npc_challenge")+') has been added to the available Wild Shapes.');
+                    sendChat(
+                        AWS_name,
+                        "/w " +
+                            playerName +
+                            " " +
+                            beast.get("name") +
+                            " (CR " +
+                            getAttrByName(beast.id, "npc_challenge") +
+                            ") has been added to the available Wild Shapes."
+                    );
                     return;
-                })
-
+                });
             } else {
-                sendChat(AWS_error, '/w '+playerName+' '+beast.get('name')+' (CR '+getAttrByName(beast.id, "npc_challenge")+') is already amongst the available Wild Shapes. Error code 15.');
-                log(AWS_log+beast.get('name')+' (CR '+getAttrByName(beast.id, "npc_challenge")+') is already amongst the available Wild Shapes. Error code 15.');
+                sendChat(
+                    AWS_error,
+                    "/w " +
+                        playerName +
+                        " " +
+                        beast.get("name") +
+                        " (CR " +
+                        getAttrByName(beast.id, "npc_challenge") +
+                        ") is already amongst the available Wild Shapes. Error code 15."
+                );
+                log(
+                    AWS_log +
+                        beast.get("name") +
+                        " (CR " +
+                        getAttrByName(beast.id, "npc_challenge") +
+                        ") is already amongst the available Wild Shapes. Error code 15."
+                );
                 return;
             }
-        })
+        });
     }
 
     function removeBeast(msg, playerName) {
         //debug
-        if (AWS_debug) {log(AWS_log+"removeBeast() function called.")};
+        if (AWS_debug) {
+            log(AWS_log + "removeBeast() function called.");
+        }
 
-        if(!msg.content.split(' ', 3)[2] || msg.content.split(' ', 3)[2] == undefined) { // if no beast name was supplied with remove command
-            _.each(msg.selected, function(obj) {
+        if (
+            !msg.content.split(" ", 3)[2] ||
+            msg.content.split(" ", 3)[2] == undefined
+        ) {
+            // if no beast name was supplied with remove command
+            _.each(msg.selected, function (obj) {
                 let beastToken = getObj(obj._type, obj._id);
                 let beast;
-                if (beastToken.get('represents')) {
-                    beast = getObj('character', beastToken.get('represents'));
+                if (beastToken.get("represents")) {
+                    beast = getObj("character", beastToken.get("represents"));
 
                     if (beast !== undefined) {
-                        log('Attempting to Remove '+beast.get('name')+', with WS value: '+getAttrByName(beast.id, 'ws'));
+                        log(
+                            "Attempting to Remove " +
+                                beast.get("name") +
+                                ", with WS value: " +
+                                getAttrByName(beast.id, "ws")
+                        );
 
-                        if (getAttrByName(beast.id, 'ws') !== undefined) {
-                            findObjs({_type: 'attribute', _characterid: beast.id, name: 'ws'}, {caseInsensitive: true})[0].remove();
-                            sendChat(AWS_name, '/w '+playerName+' '+beast.get('name')+' (CR '+getAttrByName(beast.id, "npc_challenge")+') has been removed from the available Wild Shapes.');
+                        if (getAttrByName(beast.id, "ws") !== undefined) {
+                            findObjs(
+                                {
+                                    _type: "attribute",
+                                    _characterid: beast.id,
+                                    name: "ws",
+                                },
+                                { caseInsensitive: true }
+                            )[0].remove();
+                            sendChat(
+                                AWS_name,
+                                "/w " +
+                                    playerName +
+                                    " " +
+                                    beast.get("name") +
+                                    " (CR " +
+                                    getAttrByName(beast.id, "npc_challenge") +
+                                    ") has been removed from the available Wild Shapes."
+                            );
                             return;
                         } else {
-                            sendChat(AWS_error, `/w `+playerName+` `+beast.get(`name`)+` (CR `+getAttrByName(beast.id, "npc_challenge")+`) is not amongst the available Wild Shapes, and so can't be removed from the Wild Shapes list. Error code 16.`);
-                            log(AWS_log+beast.get(`name`)+` (CR `+getAttrByName(beast.id, "npc_challenge")+`) is not amongst the available Wild Shapes, and so can't be removed from the Wild Shapes list. Error code 16.`);
+                            sendChat(
+                                AWS_error,
+                                `/w ` +
+                                    playerName +
+                                    ` ` +
+                                    beast.get(`name`) +
+                                    ` (CR ` +
+                                    getAttrByName(beast.id, "npc_challenge") +
+                                    `) is not amongst the available Wild Shapes, and so can't be removed from the Wild Shapes list. Error code 16.`
+                            );
+                            log(
+                                AWS_log +
+                                    beast.get(`name`) +
+                                    ` (CR ` +
+                                    getAttrByName(beast.id, "npc_challenge") +
+                                    `) is not amongst the available Wild Shapes, and so can't be removed from the Wild Shapes list. Error code 16.`
+                            );
                             return;
                         }
                     } else {
-                        sendChat(AWS_error, `/w `+playerName+` `+beast.get(`name`)+` (CR `+getAttrByName(beast.id, "npc_challenge")+`) is not amongst the available Wild Shapes, and so can't be removed from the Wild Shapes list. Error code 13.`);
-                        log(AWS_log+beast.get(`name`)+` (CR `+getAttrByName(beast.id, "npc_challenge")+`) is not amongst the available Wild Shapes, and so can't be removed from the Wild Shapes list. Error code 13.`);
+                        sendChat(
+                            AWS_error,
+                            `/w ` +
+                                playerName +
+                                ` ` +
+                                beast.get(`name`) +
+                                ` (CR ` +
+                                getAttrByName(beast.id, "npc_challenge") +
+                                `) is not amongst the available Wild Shapes, and so can't be removed from the Wild Shapes list. Error code 13.`
+                        );
+                        log(
+                            AWS_log +
+                                beast.get(`name`) +
+                                ` (CR ` +
+                                getAttrByName(beast.id, "npc_challenge") +
+                                `) is not amongst the available Wild Shapes, and so can't be removed from the Wild Shapes list. Error code 13.`
+                        );
                         return;
                     }
                 } else {
-                    sendChat(AWS_error, `/w `+playerName+` A selected beast's sheet could not be identified. Please ensure all selected tokens represent their sheets. Error code 30.`);
-                    log(AWS_log+`A selected beast's sheet could not be identified. Please ensure all selected tokens represent their sheets. Error code 30.`);
+                    sendChat(
+                        AWS_error,
+                        `/w ` +
+                            playerName +
+                            ` A selected beast's sheet could not be identified. Please ensure all selected tokens represent their sheets. Error code 30.`
+                    );
+                    log(
+                        AWS_log +
+                            `A selected beast's sheet could not be identified. Please ensure all selected tokens represent their sheets. Error code 30.`
+                    );
                 }
-            })
-        } else { // if beast name was supplied by text with remove command
+            });
+        } else {
+            // if beast name was supplied by text with remove command
             let beastName = "";
-            for (let i = 2; i < msg.content.split(' ').length; i++) {
-                beastName = beastName.concat(msg.content.split(' ')[i])+" ";
+            for (let i = 2; i < msg.content.split(" ").length; i++) {
+                beastName = beastName.concat(msg.content.split(" ")[i]) + " ";
             }
             beastName = beastName.trim();
             let beast;
-            if (findObjs({_type: 'character', name: beastName})[0] != undefined) {
-                beast = findObjs({_type: 'character', name: beastName})[0];
-                if (getAttrByName(beast.id, 'ws') !== undefined) {
-                    findObjs({_type: 'attribute', _characterid: beast.id, name: 'ws'}, {caseInsensitive: true})[0].remove();
-                    sendChat(AWS_name, '/w '+playerName+' '+beast.get('name')+' (CR '+getAttrByName(beast.id, "npc_challenge")+') has been removed from the available Wild Shapes.');
+            if (
+                findObjs({ _type: "character", name: beastName })[0] !=
+                undefined
+            ) {
+                beast = findObjs({ _type: "character", name: beastName })[0];
+                if (getAttrByName(beast.id, "ws") !== undefined) {
+                    findObjs(
+                        {
+                            _type: "attribute",
+                            _characterid: beast.id,
+                            name: "ws",
+                        },
+                        { caseInsensitive: true }
+                    )[0].remove();
+                    sendChat(
+                        AWS_name,
+                        "/w " +
+                            playerName +
+                            " " +
+                            beast.get("name") +
+                            " (CR " +
+                            getAttrByName(beast.id, "npc_challenge") +
+                            ") has been removed from the available Wild Shapes."
+                    );
                     return;
                 } else {
-                    sendChat(AWS_error, `/w `+playerName+` `+beast.get(`name`)+` (CR `+getAttrByName(beast.id, "npc_challenge")+`) is not amongst the available Wild Shapes, and so can't be removed from the Wild Shapes list. Error code 33.`);
-                    log(AWS_log+beast.get(`name`)+` (CR `+getAttrByName(beast.id, "npc_challenge")+`) is not amongst the available Wild Shapes, and so can't be removed from the Wild Shapes list. Error code 33.`);
+                    sendChat(
+                        AWS_error,
+                        `/w ` +
+                            playerName +
+                            ` ` +
+                            beast.get(`name`) +
+                            ` (CR ` +
+                            getAttrByName(beast.id, "npc_challenge") +
+                            `) is not amongst the available Wild Shapes, and so can't be removed from the Wild Shapes list. Error code 33.`
+                    );
+                    log(
+                        AWS_log +
+                            beast.get(`name`) +
+                            ` (CR ` +
+                            getAttrByName(beast.id, "npc_challenge") +
+                            `) is not amongst the available Wild Shapes, and so can't be removed from the Wild Shapes list. Error code 33.`
+                    );
                     return;
                 }
             } else {
-                sendChat(AWS_error, `/w `+playerName+` Sheet for beast `+beastName+` could not be found. Please ensure all selected tokens represent their sheets or that the beast name was spelt correctly. Error code 28.`);
-                log(AWS_log+`Sheet for beast `+beastName+` could not be found via token.represents of find by name. Error code 28.`);
+                sendChat(
+                    AWS_error,
+                    `/w ` +
+                        playerName +
+                        ` Sheet for beast ` +
+                        beastName +
+                        ` could not be found. Please ensure all selected tokens represent their sheets or that the beast name was spelt correctly. Error code 28.`
+                );
+                log(
+                    AWS_log +
+                        `Sheet for beast ` +
+                        beastName +
+                        ` could not be found via token.represents of find by name. Error code 28.`
+                );
                 return;
             }
         }
@@ -963,133 +1592,201 @@ on("ready", function() {
 
     function listBeasts(beastList, playerName) {
         //debug
-        if (AWS_debug) {log(AWS_log+"listBeasts() function called.")};
+        if (AWS_debug) {
+            log(AWS_log + "listBeasts() function called.");
+        }
 
-        if (beastList == undefined || beastList.length == 0){
-            sendChat(AWS_name, `/w `+playerName+` No Beasts in BeastList. Error code 29.`);
-            log(AWS_log+`No Beasts in BeastList. Error code 29.`)
+        if (beastList == undefined || beastList.length == 0) {
+            sendChat(
+                AWS_name,
+                `/w ` + playerName + ` No Beasts in BeastList. Error code 29.`
+            );
+            log(AWS_log + `No Beasts in BeastList. Error code 29.`);
             return;
         } else {
-            let msg = '/w '+playerName+' &{template:default} {{name=**All WildShape Beasts**}}';
+            let msg =
+                "/w " +
+                playerName +
+                " &{template:default} {{name=**All WildShape Beasts**}}";
             let i = 0;
-            _.each(beastList, function(beast) {
-                msg = msg.concat(' {{Beast '+(i+1)+' = '+beast.name+', CR: '+beast.cr+' [X](!<br>aws remove '+beast.name+')}}');
+            _.each(beastList, function (beast) {
+                msg = msg.concat(
+                    " {{Beast " +
+                        (i + 1) +
+                        " = " +
+                        beast.name +
+                        ", CR: " +
+                        beast.cr +
+                        " [X](!<br>aws remove " +
+                        beast.name +
+                        ")}}"
+                );
                 i++;
-            })
-            sendChat(AWS_name, msg)
+            });
+            sendChat(AWS_name, msg);
         }
     }
 
     function populate(playerName) {
         //debug
-        if (AWS_debug) {log(AWS_log+"populate() function called.")};
+        if (AWS_debug) {
+            log(AWS_log + "populate() function called.");
+        }
 
-        _.each(findObjs({_type: 'character'}), function(sheet) {
-            if (getAttrByName(sheet.id, 'npc_type') !== undefined) { // if there's an attribute 'npc_type'
-                if (getAttrByName(sheet.id, 'npc_type').search(/beast/i) != -1) { // if that attribute contains 'beast'
-                    if (getAttrByName(sheet.id, 'ws') === undefined || getAttrByName(sheet.id, 'ws') != 1) {
-                        sheet.get('_defaulttoken', function(o){
-                            if(o != 'null') {
-                                log(sheet.get('name')+`got into creation area <---`)
-                                log(sheet.get('name')+` 'o': `+o)
-                                createObj('attribute', {
+        _.each(findObjs({ _type: "character" }), function (sheet) {
+            if (getAttrByName(sheet.id, "npc_type") !== undefined) {
+                // if there's an attribute 'npc_type'
+                if (
+                    getAttrByName(sheet.id, "npc_type").search(/beast/i) != -1
+                ) {
+                    // if that attribute contains 'beast'
+                    if (
+                        getAttrByName(sheet.id, "ws") === undefined ||
+                        getAttrByName(sheet.id, "ws") != 1
+                    ) {
+                        sheet.get("_defaulttoken", function (o) {
+                            if (o != "null") {
+                                log(
+                                    sheet.get("name") +
+                                        `got into creation area <---`
+                                );
+                                log(sheet.get("name") + ` 'o': ` + o);
+                                createObj("attribute", {
                                     _characterid: sheet.id,
-                                    name: 'ws',
-                                    current: '1'
+                                    name: "ws",
+                                    current: "1",
                                 });
-                                sendChat(AWS_name, `/w `+playerName+` '`+sheet.get('name')+`' added to the Wild Shape list.`);
+                                sendChat(
+                                    AWS_name,
+                                    `/w ` +
+                                        playerName +
+                                        ` '` +
+                                        sheet.get("name") +
+                                        `' added to the Wild Shape list.`
+                                );
                             } else {
-                                sendChat(AWS_name, `/w `+playerName+` **'`+sheet.get('name')+`' can't be added to the Wild Shape list because the sheet has no default token.** Error code 27.`);
-                                log(AWS_log+sheet.get('name')+`' can't be added to the Wild Shape list because the sheet has no default token. Error code 27.`);
+                                sendChat(
+                                    AWS_name,
+                                    `/w ` +
+                                        playerName +
+                                        ` **'` +
+                                        sheet.get("name") +
+                                        `' can't be added to the Wild Shape list because the sheet has no default token.** Error code 27.`
+                                );
+                                log(
+                                    AWS_log +
+                                        sheet.get("name") +
+                                        `' can't be added to the Wild Shape list because the sheet has no default token. Error code 27.`
+                                );
                             }
-                        })
+                        });
                     }
                 }
             }
-        })
+        });
     }
 
     function getCRlimit(char, charLevel, charSubclass, option) {
         //debug
-        if (AWS_debug) {log(AWS_log+"getCRlimit() function called.")};
+        if (AWS_debug) {
+            log(AWS_log + "getCRlimit() function called.");
+        }
 
         //moonDruid setup
         let subclass = charSubclass;
         let moonDruid = false;
         if (subclass) {
-            if (subclass.search(/moon/i) !== -1) {moonDruid = true}; // if "moon" is in the subclass attribute (ignoring caps), moonDruid = true
+            if (subclass.search(/moon/i) !== -1) {
+                moonDruid = true;
+            } // if "moon" is in the subclass attribute (ignoring caps), moonDruid = true
             //debug
-            if(AWS_debug){log(AWS_log+`MoonDruid = true`)}
+            if (AWS_debug) {
+                log(AWS_log + `MoonDruid = true`);
+            }
         }
 
         //cr limit setup
         let crLimit;
         let crFilter;
-        if (getAttrByName(char.id, 'aws_override') == 1) {
+        if (getAttrByName(char.id, "aws_override") == 1) {
             //debug
-            if (AWS_debug) {log(AWS_log+`Selected token can take any wild shape.`)}
+            if (AWS_debug) {
+                log(AWS_log + `Selected token can take any wild shape.`);
+            }
 
             crLimit = 99;
             crFilter = 99;
         } else if (moonDruid && charLevel >= 6) {
             //debug
-            if (AWS_debug) {log(AWS_log+"Selected token represents a Moon Druid of at least 2nd level.")};
+            if (AWS_debug) {
+                log(
+                    AWS_log +
+                        "Selected token represents a Moon Druid of at least 2nd level."
+                );
+            }
 
-            crLimit = Math.floor(Math.max(charLevel/3, 1));
+            crLimit = Math.floor(Math.max(charLevel / 3, 1));
             crFilter = crLimit;
         } else {
             //debug
-            if (AWS_debug) {log(AWS_log+"Selected token represents a Druid of at least 2nd level (may or may not be a Moon druid, it doesn't affect CR limit until 6th level).")};
+            if (AWS_debug) {
+                log(
+                    AWS_log +
+                        "Selected token represents a Druid of at least 2nd level (may or may not be a Moon druid, it doesn't affect CR limit until 6th level)."
+                );
+            }
 
             if (charLevel >= 8) {
                 crLimit = "1";
                 crFilter = 1;
             } else if (charLevel >= 4) {
                 crLimit = "1/2";
-                crFilter = .5;
+                crFilter = 0.5;
             } else {
                 crLimit = "1/4";
-                crFilter = .2;
+                crFilter = 0.2;
             }
-        };
+        }
         switch (option) {
-            case 'filter':
+            case "filter":
                 return crFilter;
-            case 'limit':
+            case "limit":
                 return crLimit;
             default:
-                log(AWS_log+`Error code 40.`);
+                log(AWS_log + `Error code 40.`);
         }
     }
 
     function getBeastCR(beastID, option) {
         //debug
-        if (AWS_debug) {log(AWS_log+"getBeastCR() function called.")};
+        if (AWS_debug) {
+            log(AWS_log + "getBeastCR() function called.");
+        }
 
         let beastCR = getAttrByName(beastID, "npc_challenge");
         let beastFilter;
         switch (beastCR) {
-            case '1/8':
-                beastFilter = .1;
+            case "1/8":
+                beastFilter = 0.1;
                 break;
-            case '1/4':
-                beastFilter = .2;
+            case "1/4":
+                beastFilter = 0.2;
                 break;
-            case '1/2':
-                beastFilter = .5;
+            case "1/2":
+                beastFilter = 0.5;
                 break;
             default:
                 beastFilter = beastCR;
                 break;
         }
 
-        switch(option){
-            case 'cr':
+        switch (option) {
+            case "cr":
                 return beastCR;
-            case 'filter':
+            case "filter":
                 return beastFilter;
             default:
-                log(AWS_log+`Error code 41.`)
+                log(AWS_log + `Error code 41.`);
         }
     }
 
