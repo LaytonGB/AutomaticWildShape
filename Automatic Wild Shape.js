@@ -1,21 +1,21 @@
 // keep turn order for shape changed creature
 
-// Constants
-const AWS_name = "AWS";
-const AWS_state_name = "AUTOMATICWILDSHAPE";
-const AWS_error = AWS_name+" ERROR";
-const AWS_log = AWS_name+" - ";
-
-// Debug
-const AWS_debug = false;
-
-// Settings
-const AWS_notifyGM = true;
-const AWS_hpbar = 3;
-
 // Automatic Wild Shape
 on("ready", function() {
     log("Automatic Wild Shape API Ready!");
+
+    // ===========================================|Constants
+    const AWS_name = "AWS";
+    const AWS_state_name = "AUTOMATICWILDSHAPE";
+    const AWS_error = AWS_name+" ERROR";
+    const AWS_log = AWS_name+" - ";
+
+    // Debug
+    const AWS_debug = false;
+
+    // Settings
+    const AWS_notifyGM = true;
+    const AWS_hpbar = 3;
 
     /*  Check each of the AWS public macros, and if they don't exist find the
     first GM and create the macro as that GM. */
@@ -80,8 +80,11 @@ on("ready", function() {
                     !aws list add => Add the currently selected token(s) to the wild shapes list.
                     !aws list remove => Remove the sheets listed by their ID(s).
                     */
-                    case parts.length === 2:
-                        return listAll(msg);
+                    case parts.length === 2: {
+                        const attrs = listAll(msg);
+                        if (attrs) return listToChat(attrs);
+                    }
+
                     case parts[1] === "add":
                         if (!playerIsGM(msg.playerid))
                             return toChat(
@@ -89,6 +92,7 @@ on("ready", function() {
                                 { code: 16, player: msg.who }
                             );
                         return listAdd(msg);
+
                     case parts[1] === "remove":
                         if (!playerIsGM(msg.playerid))
                             return toChat(
@@ -96,6 +100,7 @@ on("ready", function() {
                                 { code: 17, player: msg.who }
                             );
                         return listRemove(msg);
+
                     default:
                         return toChat(
                             'Command not understood, commands starting with "!aws list" must be followed by nothing, "add", or "remove".',
@@ -162,50 +167,164 @@ on("ready", function() {
     /**
      * Outputs a list of all wild shapes with some details.
      * @param {ChatEventData} msg Is the user input.
+     * @returns {[{ cr:string, filter:number, id:string, name:string, sheet:Character, wsId:Attribute }]}
      */
     function listAll(msg) {
         const attrs = findObjs({
             _type: "attribute",
             name: "ws",
         });
-        if (attrs.length > 0) makeTableFromAttrs(attrs);
-        else
-            return toChat("There are no sheets in the wild shape list.", {
+        if (attrs.length < 1) return toChat("There are no sheets in the wild shape list.", {
                 code: 21,
                 player: msg.who,
             });
+        const beasts = attrs.map((a) => {
+            const chal = getAttrByName(a._characterid, "npc_challenge");
+            const sheet = getObj(a._characterid);
+            return {
+                cr: chal,
+                filter: Math.resolve(chal),
+                id: a._characterid,
+                name: sheet.get("name"),
+                sheet: sheet,
+                wsId: a,
+            };
+        });
+        if (msg.selected.length === 1) return listToChat(msg, filterList(msg, beasts));
+        return listToChat(msg, beasts);
+    }
+
+    /**
+     * Returns a list that is filtered appropriately for the selected druid PC.
+     * @param {ChatEventData} msg
+     * @param {[{ cr:string, crSort:number, id:string, name:string, sheet:Character, wsId:Attribute }]} beasts
+     */
+    function druidList(msg, beasts) {
+        // TODO error messages
+        // TODO deal with `aws_override`
+        const char = charFromMessage(msg);
+        if (!char) return toChat("No char sheet", { code: 31 }); //TODO accept if GM
+        let druid = getDetails(char);
+        if (!druid) return toChat("No attrs from char.", { code: 32 });
+        if (druid.level < 2) return toChat("Lvl too low.", { code: 33 });
+        Object.assign(druid, getCR(druid)); // adds `maxCr` and `filter` properties to the druid object
+    }
+
+    /**
+     * @param {ChatEventData} msg
+     * @returns {Character | undefined}
+     */
+    function charFromMessage(msg) {
+        const token = getObj("graphic", msg.selected[0]._id);
+        return getObj("character", token?._characterid);
+    }
+
+    /**
+     * Takes a player character object and returns all the parts needed for wild shape calculations.
+     * @param {Character} char
+     * @returns {{ class:string, classAttr:string, level:number, levelAttr:string, subclass:string, subclassAttr:string, }}
+     */
+    function getDetails(char) {
+        let classIndex = -1;
+        let classAttrVal = getAttrByName(char.id, "class");
+        if (classAttrVal?.toLowerCase() === "druid") classIndex = 0;
+        // if the class was not in the default attribute we need to check the 4 multiclasses
+        else {
+            for (let i = 1; i <= 4; i++) {
+                if (getAttrByName(char.id, `multiclass${i}_flag`) !== 1) continue;
+                if (
+                    getAttrByName(char.id, `multiclass${i}`)?.toLowerCase() ===
+                    "druid"
+                ) {
+                    classIndex = i;
+                    break;
+                }
+            }
+        }
+        if (classIndex === -1)
+            return toChat("No druid class found on sheet.", { code: 32 }); // TODO accept NPCs if GM
+        let classAttr;
+        let levelAttr;
+        let subclassAttr;
+        switch (classIndex) {
+            case 0:
+                classAttr = "class";
+                levelAttr = "base_level";
+                subclassAttr = "subclass";
+                break;
+
+            case 1:
+            case 2:
+            case 3:
+            case 4:
+                classAttr = `multiclass${classIndex}`;
+                levelAttr = `multiclass${classIndex}_lvl`;
+                subclassAttr = `multiclass${classIndex}_subclass`;
+                break;
+        }
+        return {
+            classAttr,
+            class: getAttrByName(char.id, classAttr),
+            levelAttr,
+            level: +getAttrByName(char.id, levelAttr), // NOTE may cause errors
+            subclassAttr,
+            subclass: getAttrByName(char.id, subclassAttr),
+        };
+    }
+
+    /**
+     * @param {{class:string, classAttr:string, level:number, levelAttr:string, subclass:string, subclassAttr:string}} druid
+     * @returns {{filter:number, maxCr:string}}
+     */
+    function getCR(druid) {
+        let filter;
+        let maxCr;
+        switch (true) {
+            case druid.subclass?.toLowerCase().trim() === "moon" &&
+                druid.level >= 6:
+                // moon druids are treated like normal druids until 6th level
+                filter = Math.floor(Math.max(charLevel / 3, 1));
+                maxCr = filter.toString();
+
+            default:
+                maxCr = druidLevelToCr(druid.level);
+                filter = maxCr.split("/").reduce((a, b) => +a / +b, 0);
+        }
+        return { filter, maxCr };
+    }
+
+    /**
+     * Takes a druid's level and returns the CR limit of beasts that druid can turn into.
+     *
+     * Does not apply to moon druids of >= 6th level.
+     * @param {number} level
+     * @returns {string}
+     */
+    function druidLevelToCr(level) {
+        if (level >= 8) return "1";
+        if (level >= 4) return "1/2";
+        return "1/4";
     }
 
     /**
      * Make a table out of the supplied attribute's sheets ready to post to chat.
-     * @param {Map<id:string = attr:Attribute>} sheetAttrs A map of attribute objects with their related character ids as the key.
-     * @param {{cr?: boolean, remove?: boolean}} cr,  cr: boolean, remove: boolean
+     * @param {ChatEventData} msg
+     * @param {[{ cr:string, filter:number, id:string, name:string, sheet:Character, wsId:Attribute }]} beasts A map of attribute objects with their related character ids as the key.
+     * @param {{ cr?:boolean, remove?:boolean }} options If `cr = true` then beast CR will be shown and beasts will be sorted by CR.
+     *
+     * If `remove = true` then a button will be provided beside each beast that, when clicked by a GM, will remove the beast from the wild shapes list.
      */
-    function makeTableFromAttrs(attrs, { cr = false, remove = false } = {}) {
+    function listToChat(msg, beasts, { cr = false, remove = false } = {}) {
         const tableName = cr ? "Wild Shapes by CR" : "Wild Shapes by Name";
-        let out = `&{template:default}{{Name=**${tableName}**}}`;
         /*
         Get array of Names or CRs
         Using names then CRs(?), sort shapes
         For each shape add a section to the output in order
         */
-        attrs.map((a) => {
-            const chal = getAttrByName(a._characterid, "npc_challenge");
-            return {
-                id: a._characterid,
-                name: getObj(a._characterid).get("name"),
-                wsId: a.id,
-                cr: chal,
-                crSort: Math.resolve(chal),
-            };
-        });
-        attrs.sort((a, b) => a.name - b.name);
-        if (cr) attrs.sort((a, b) => a.crSort - b.crSort);
-        attrs.forEach((a) =>
-            out.concat(
-                `{{${a.name}=${cr ? a.cr : ""}[X](!<br>aws list remove ${a.name})}}`
-            )
-        );
+        beasts.sort((a, b) => a.name - b.name);
+        if (cr) beasts.sort((a, b) => a.crSort - b.crSort);
+        beasts.reduce((a, b) => a + `{{${b.name}=${cr ? b.cr : ""} ${remove ? `[X](!<br>aws list remove ${ b.name })` : ""}}}`, `&{template:default}{{Name=**${tableName}**}}` );
+        return toChat(beasts, {player: msg.who});
     }
 
     const toChat = function (
