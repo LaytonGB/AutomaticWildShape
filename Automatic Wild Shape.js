@@ -4,18 +4,21 @@
 on("ready", function () {
     log("Automatic Wild Shape API Ready!");
 
+    /* -------------------------------------------------------------------------- */
+    /*                                   Options                                  */
+    /* -------------------------------------------------------------------------- */
+    // Settings
+    const AWS_notifyGM = true;
+    const AWS_hpbar = 3;
+
+    // Debug
+    const AWS_debug = false;
+
     /* -------------------------------- Constants ------------------------------- */
     const AWS_name = "AWS";
     const AWS_state_name = "AUTOMATICWILDSHAPE";
     const AWS_error = AWS_name + " ERROR";
     const AWS_log = AWS_name + " - ";
-
-    // Debug
-    const AWS_debug = false;
-
-    // Settings
-    const AWS_notifyGM = true;
-    const AWS_hpbar = 3;
 
     /* --------------------------------- Classes -------------------------------- */
 
@@ -104,7 +107,7 @@ on("ready", function () {
         calcCr(level = this.level) {
             return {
                 maxCr: this.druidLevelToCr(level),
-                filter: maxCr.split("/").reduce((a, b) => +a / +b, 0),
+                filter: fractionToNumber(maxCr),
             };
         }
 
@@ -139,6 +142,20 @@ on("ready", function () {
                 filter: Math.floor(Math.max(level / 3, 1)),
                 maxCr: filter.toString(),
             };
+        }
+    }
+
+    class Beast {
+        /**
+         * @param {Character} char
+         */
+        constructor(char) {
+            const cr = getAttrByName(char.id, "npc_challenge");
+            this.cr = cr;
+            this.filter = fractionToNumber(cr);
+            this.id = char.id;
+            this.name = char.get("name");
+            this.sheet = char;
         }
     }
 
@@ -235,7 +252,7 @@ on("ready", function () {
          * !aws list remove => Remove the sheets listed by their ID(s).
          */
         function listOptions() {
-            if (parts.length === 2) if (listAll(msg)) return listToChat(attrs);
+            if (parts.length === 2) if (getBeasts(msg)) return listToChat(attrs);
 
             if (parts[1] === "add") {
                 if (!playerIsGM(msg.playerid))
@@ -277,11 +294,18 @@ on("ready", function () {
         }
     });
 
-    /** Outputs a list of all wild shapes with some details.
-     * @param {ChatEventData} msg Is the user input.
-     * @returns {[{ cr:string, filter:number, id:string, name:string, sheet:Character, wsId:Attribute }]}
+    /** Returns a filtered array of beasts based on the supplied CR.
+     * @param {number} filter
+     * @returns {Beast[]}
      */
-    function listAll(msg) {
+    function filterBeasts(filter) {
+        return getBeasts.filter(a => a.filter <= filter);
+    }
+
+    /** Outputs a list of all wild shapes with some details.
+     * @returns {Beast[]}
+     */
+    function getBeasts() {
         const attrs = findObjs({
             _type: "attribute",
             name: "ws",
@@ -291,21 +315,10 @@ on("ready", function () {
                 code: 21,
                 player: msg.who,
             });
-        const beasts = attrs.map((a) => {
-            const chal = getAttrByName(a._characterid, "npc_challenge");
-            const sheet = getObj(a._characterid);
-            return {
-                cr: chal,
-                filter: Math.resolve(chal),
-                id: a._characterid,
-                name: sheet.get("name"),
-                sheet: sheet,
-                wsId: a,
-            };
-        });
-        if (msg.selected.length === 1)
-            return listToChat(msg, filterList(msg, beasts));
-        return listToChat(msg, beasts);
+        return attrs
+            .map(a => getObj("character", a._characterid))
+            .filter(a => a !== undefined)
+            .map(a => new Beast(a));
     }
 
     /** Returns a list that is filtered appropriately for the selected druid PC.
@@ -321,7 +334,8 @@ on("ready", function () {
         if (druid.level < 2) return toChat("Lvl too low.", { code: 33 });
         if (druid.subclass?.toLowerCase().trim() === "moon")
             druid = MoonDruid(druid);
-        // TODO continue here.
+        const beasts = filterBeasts(druid.filter);
+        return listToChat(beasts);
     }
 
     /**
@@ -333,29 +347,23 @@ on("ready", function () {
         return getObj("character", token?._characterid);
     }
 
-    /**
-     * Make a table out of the supplied attribute's sheets ready to post to chat.
+    /** Make a table out of the supplied attribute's sheets ready to post to chat.
      * @param {ChatEventData} msg
-     * @param {[{ cr:string, filter:number, id:string, name:string, sheet:Character, wsId:Attribute }]} beasts A map of attribute objects with their related character ids as the key.
-     * @param {{ cr?:boolean, remove?:boolean }} options If `cr = true` then beast CR will be shown and beasts will be sorted by CR.
+     * @param {Beast[]} beasts
+     * @param {{cr?:boolean, remove?:boolean, transform?:boolean}} options If `cr = true` then beast CR will be shown and beasts will be sorted by CR.
      *
      * If `remove = true` then a button will be provided beside each beast that, when clicked by a GM, will remove the beast from the wild shapes list.
+     *
+     * If `transform = true` then a button will be provided beside each beast that will transform the selected token into that beast when clicked by a player controlling the token.
      */
-    function listToChat(msg, beasts, { cr = false, remove = false } = {}) {
+    function listToChat(msg, beasts, { cr = false, remove = false, transform = false } = {}) {
         const tableName = cr ? "Wild Shapes by CR" : "Wild Shapes by Name";
-        /*
-        Get array of Names or CRs
-        Using names then CRs(?), sort shapes
-        For each shape add a section to the output in order
-        */
         beasts.sort((a, b) => a.name - b.name);
-        if (cr) beasts.sort((a, b) => a.crSort - b.crSort);
+        if (cr) beasts.sort((a, b) => a.filter - b.filter);
         beasts.reduce(
             (a, b) =>
                 a +
-                `{{${b.name}=${cr ? b.cr : ""} ${
-                    remove ? `[X](!<br>aws list remove ${b.name})` : ""
-                }}}`,
+                `{{${b.name}=${cr ? b.cr : ""} ${transform?`[✓](!<br>aws ${b.name})`:""}${remove?`[X](!<br>aws list remove ${b.name})`:""}}}`,
             `&{template:default}{{Name=**${tableName}**}}`
         );
         return toChat(beasts, { player: msg.who });
@@ -365,7 +373,7 @@ on("ready", function () {
      * @param {string} msg
      * @param {{code:number, player:string, logMsg:string}} options
      */
-    const toChat = function (
+    function toChat (
         msg,
         { code = undefined, player = undefined, logMsg = undefined } = {}
     ) {
@@ -378,6 +386,13 @@ on("ready", function () {
         if (isError)
             log(AWS_log + (logMsg || msg) + " Error code " + code + ".");
     };
+
+    /** Takes a string fraction and returns it as a resolved number.
+     * @param {string} str
+     */
+    function fractionToNumber(str) {
+        return str.split("/").reduce((a, b) => +a / +b, 0);
+    }
 
     /* -------------------------------------------------------------------------- */
     /*                          Old code below this point                         */
