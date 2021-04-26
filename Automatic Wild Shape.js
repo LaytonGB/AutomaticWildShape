@@ -1,10 +1,10 @@
 // keep turn order for shape changed creature
 
 // Automatic Wild Shape
-on("ready", function() {
+on("ready", function () {
     log("Automatic Wild Shape API Ready!");
 
-    // ===========================================|Constants
+    /* -------------------------------- Constants ------------------------------- */
     const AWS_name = "AWS";
     const AWS_state_name = "AUTOMATICWILDSHAPE";
     const AWS_error = AWS_name + " ERROR";
@@ -17,6 +17,132 @@ on("ready", function() {
     const AWS_notifyGM = true;
     const AWS_hpbar = 3;
 
+    /* --------------------------------- Classes -------------------------------- */
+
+    /** A class that represents any druid, and contains functions to get the max CR of the druid's wild shapes. */
+    class Druid {
+        /**
+         * @param {Character|Druid} char
+         */
+        constructor(char) {
+            // Accept a Druid instance in place of `char`.
+            if (char instanceof Druid) return Object.assign(this, char);
+            // Apply all the properties to `this` while maintaining property names.
+            Object.assign(this, this.getDetails(char));
+            Object.assign(
+                this,
+                this.override ? { maxCr: "99", filter: 99 } : this.getCr(level)
+            );
+        }
+
+        /** Takes a player Character object and returns all the parts needed for wild shape calculations.
+         * @param {Character} char
+         * @returns {{id:string, override:string, class:string, classAttr:string, level:number, levelAttr:string, subclass:string, subclassAttr:string}}
+         */
+        getDetails(char) {
+            let classIndex = -1;
+            let classAttrVal = getAttrByName(char.id, "class");
+            if (classAttrVal?.toLowerCase() === "druid") classIndex = 0;
+            // if the class was not in the default attribute we need to check the 4 multiclasses
+            else {
+                for (let i = 1; i <= 4; i++) {
+                    if (getAttrByName(char.id, `multiclass${i}_flag`) !== 1)
+                        continue;
+                    if (
+                        getAttrByName(
+                            char.id,
+                            `multiclass${i}`
+                        )?.toLowerCase() === "druid"
+                    ) {
+                        classIndex = i;
+                        break;
+                    }
+                }
+            }
+            if (classIndex === -1)
+                return toChat("No druid class found on sheet.", { code: 32 }); // TODO accept NPCs if GM
+            let classAttr;
+            let levelAttr;
+            let subclassAttr;
+            switch (classIndex) {
+                case 0:
+                    classAttr = "class";
+                    levelAttr = "base_level";
+                    subclassAttr = "subclass";
+                    break;
+
+                case 1:
+                case 2:
+                case 3:
+                case 4:
+                    classAttr = `multiclass${classIndex}`;
+                    levelAttr = `multiclass${classIndex}_lvl`;
+                    subclassAttr = `multiclass${classIndex}_subclass`;
+                    break;
+            }
+            return {
+                id: char.id,
+                override: getAttrByName(char.id, "aws_override"),
+                classAttr,
+                class: getAttrByName(char.id, classAttr),
+                levelAttr,
+                level: +getAttrByName(char.id, levelAttr), // NOTE may cause errors
+                subclassAttr,
+                subclass: getAttrByName(char.id, subclassAttr),
+            };
+        }
+
+        /** Returns max wildshape CR accounting for the override. */
+        getCr(level = this.level) {
+            if (this.override) return { maxCr: "99", filter: 99 };
+            return this.calcCr(level);
+        }
+
+        /** Calculates max wildshape CR based on supplied level or `this.level`.
+         * @returns {{maxCr:string, filter:number}}
+         */
+        calcCr(level = this.level) {
+            return {
+                maxCr: this.druidLevelToCr(level),
+                filter: maxCr.split("/").reduce((a, b) => +a / +b, 0),
+            };
+        }
+
+        /** Takes a druid's level and returns the CR limit of beasts that druid can turn into.
+         *
+         * Does not apply to moon druids of >= 6th level.
+         * @param {number} level
+         * @returns {string}
+         */
+        druidLevelToCr(level) {
+            if (level >= 8) return "1";
+            if (level >= 4) return "1/2";
+            return "1/4";
+        }
+    }
+
+    class MoonDruid extends Druid {
+        /**
+         * @param {Druid} druid
+         */
+        constructor(druid) {
+            super(druid);
+        }
+
+        /** Calculates max wildshape CR based on supplied level or `this.level` for Moon Druids.
+         * @returns {{maxCr:string, filter:number}}
+         */
+        calcCr(level = this.level) {
+            // moon druids are treated like normal druids until 6th level
+            if (druid.level < 6) return super.getCr(level);
+            return {
+                filter: Math.floor(Math.max(level / 3, 1)),
+                maxCr: filter.toString(),
+            };
+        }
+    }
+
+    /* ---------------------------------- Code ---------------------------------- */
     /*  Check each of the AWS public macros, and if they don't exist find the
     first GM and create the macro as that GM. */
     const checkMacros = (function () {
@@ -68,69 +194,13 @@ on("ready", function() {
         if (msg.type !== "api" || parts[0] !== "!aws") return;
         if (AWS_notifyGM)
             toChat(`-AWS in use by ${msg.who}-`, { player: "gm" });
+        if (parts.length === 1) return transformOptions();
+        if (parts[1] === "list") return listOptions();
+        if (parts[1] === "populate") return populateOptions();
+        // Must come last in list because other commands have set variables (unlike <beast_name>)
+        return transformOptions();
 
-        switch (true) {
-            case parts.length === 1:
-                return transformOptions();
-
-            case parts[1] === "list":
-                switch (true) {
-                    /*
-                    !aws list => Show the complete wild shapes list to this user.
-                    !aws list add => Add the currently selected token(s) to the wild shapes list.
-                    !aws list remove => Remove the sheets listed by their ID(s).
-                    */
-                    case parts.length === 2: {
-                        const attrs = listAll(msg);
-                        if (attrs) return listToChat(attrs);
-                    }
-
-                    case parts[1] === "add":
-                        if (!playerIsGM(msg.playerid))
-                            return toChat(
-                                "You must be a GM to alter the wild shapes list.",
-                                { code: 16, player: msg.who }
-                            );
-                        return listAdd(msg);
-
-                    case parts[1] === "remove":
-                        if (!playerIsGM(msg.playerid))
-                            return toChat(
-                                "You must be a GM to alter the wild shapes list.",
-                                { code: 17, player: msg.who }
-                            );
-                        return listRemove(msg);
-
-                    default:
-                        return toChat(
-                            'Command not understood, commands starting with "!aws list" must be followed by nothing, "add", or "remove".',
-                            { code: 12, player: msg.who }
-                        );
-                }
-
-            case parts[1] === "populate":
-                /*
-                !aws populate => Search all character sheets and add any sheet with type "beast" to the wild shapes list.
-                */
-                if (parts.length > 2)
-                    return toChat(
-                        'Command not understood, the "!aws populate" command should not be followed by any other text.',
-                        { code: 13, player: msg.who }
-                    );
-                if (!playerIsGM(msg.playerid))
-                    return toChat(
-                        "You must be a GM to populate the wild shapes list.",
-                        { code: 17, player: msg.who }
-                    );
-                return populateList(msg);
-
-            default:
-                /* ---------------| Must come last in list |-------------------
-                because other commands have set variables (unlike <beast_name>)
-                */
-                return transformOptions();
-        }
-
+        /** Options for transforming the selected token. */
         function transformOptions() {
             if (
                 msg.selected.length !== 1 ||
@@ -148,24 +218,66 @@ on("ready", function() {
                     code: 12,
                     player: msg.who,
                 });
-            switch (true) {
-                /*
-                !aws => return list of transform options
-                !aws end => end transformation
-                !aws <beast_name> => transform into beast
-                */
-                case parts.length === 1:
-                    return giveBeastList(msg);
-                case parts[1] === "end":
-                    return endTransform(msg);
-                default:
-                    return transform(msg);
+            /*
+            !aws => return list of transform options
+            !aws end => end transformation
+            !aws <beast_name> => transform into beast
+            */
+            if (parts.length === 1) return giveBeastList(msg);
+            if (parts[1] === "end") return endTransform(msg);
+            return transform(msg);
+        }
+
+        /** !aws list => Show the complete wild shapes list to this user.
+         *
+         * !aws list add => Add the currently selected token(s) to the wild shapes list.
+         *
+         * !aws list remove => Remove the sheets listed by their ID(s).
+         */
+        function listOptions() {
+            if (parts.length === 2) if (listAll(msg)) return listToChat(attrs);
+
+            if (parts[1] === "add") {
+                if (!playerIsGM(msg.playerid))
+                    return toChat(
+                        "You must be a GM to alter the wild shapes list.",
+                        { code: 16, player: msg.who }
+                    );
+                return listAdd(msg);
             }
+
+            if (parts[1] === "remove") {
+                if (!playerIsGM(msg.playerid))
+                    return toChat(
+                        "You must be a GM to alter the wild shapes list.",
+                        { code: 17, player: msg.who }
+                    );
+                return listRemove(msg);
+            }
+
+            return toChat(
+                'Command not understood, commands starting with "!aws list" must be followed by nothing, "add", or "remove".',
+                { code: 12, player: msg.who }
+            );
+        }
+
+        /** !aws populate => Search all character sheets and add any sheet with type "beast" to the wild shapes list. */
+        function populateOptions() {
+            if (parts.length > 2)
+                return toChat(
+                    'Command not understood, the "!aws populate" command should not be followed by any other text.',
+                    { code: 13, player: msg.who }
+                );
+            if (!playerIsGM(msg.playerid))
+                return toChat(
+                    "You must be a GM to populate the wild shapes list.",
+                    { code: 17, player: msg.who }
+                );
+            return populateList(msg);
         }
     });
 
-    /**
-     * Outputs a list of all wild shapes with some details.
+    /** Outputs a list of all wild shapes with some details.
      * @param {ChatEventData} msg Is the user input.
      * @returns {[{ cr:string, filter:number, id:string, name:string, sheet:Character, wsId:Attribute }]}
      */
@@ -196,20 +308,19 @@ on("ready", function() {
         return listToChat(msg, beasts);
     }
 
-    /**
-     * Returns a list that is filtered appropriately for the selected druid PC.
+    /** Returns a list that is filtered appropriately for the selected druid PC.
      * @param {ChatEventData} msg
-     * @param {[{ cr:string, crSort:number, id:string, name:string, sheet:Character, wsId:Attribute }]} beasts
      */
-    function druidList(msg, beasts) {
+    function giveBeastList(msg) {
         // TODO error messages
         // TODO deal with `aws_override`
         const char = charFromMessage(msg);
         if (!char) return toChat("No char sheet", { code: 31 }); //TODO accept if GM
-        let druid = getDetails(char);
+        let druid = new Druid(char);
         if (!druid) return toChat("No attrs from char.", { code: 32 });
         if (druid.level < 2) return toChat("Lvl too low.", { code: 33 });
-        druid = { ...druid, ...getCR(druid) }; // adds `maxCr` and `filter` properties to the druid object
+        if (druid.subclass?.toLowerCase().trim() === "moon")
+            druid = MoonDruid(druid);
         // TODO continue here.
     }
 
@@ -220,94 +331,6 @@ on("ready", function() {
     function charFromMessage(msg) {
         const token = getObj("graphic", msg.selected[0]._id);
         return getObj("character", token?._characterid);
-    }
-
-    /**
-     * Takes a player character object and returns all the parts needed for wild shape calculations.
-     * @param {Character} char
-     * @returns {{ class:string, classAttr:string, level:number, levelAttr:string, subclass:string, subclassAttr:string, }}
-     */
-    function getDetails(char) {
-        let classIndex = -1;
-        let classAttrVal = getAttrByName(char.id, "class");
-        if (classAttrVal?.toLowerCase() === "druid") classIndex = 0;
-        // if the class was not in the default attribute we need to check the 4 multiclasses
-        else {
-            for (let i = 1; i <= 4; i++) {
-                if (getAttrByName(char.id, `multiclass${i}_flag`) !== 1)
-                    continue;
-                if (
-                    getAttrByName(char.id, `multiclass${i}`)?.toLowerCase() ===
-                    "druid"
-                ) {
-                    classIndex = i;
-                    break;
-                }
-            }
-        }
-        if (classIndex === -1)
-            return toChat("No druid class found on sheet.", { code: 32 }); // TODO accept NPCs if GM
-        let classAttr;
-        let levelAttr;
-        let subclassAttr;
-        switch (classIndex) {
-            case 0:
-                classAttr = "class";
-                levelAttr = "base_level";
-                subclassAttr = "subclass";
-                break;
-
-            case 1:
-            case 2:
-            case 3:
-            case 4:
-                classAttr = `multiclass${classIndex}`;
-                levelAttr = `multiclass${classIndex}_lvl`;
-                subclassAttr = `multiclass${classIndex}_subclass`;
-                break;
-        }
-        return {
-            classAttr,
-            class: getAttrByName(char.id, classAttr),
-            levelAttr,
-            level: +getAttrByName(char.id, levelAttr), // NOTE may cause errors
-            subclassAttr,
-            subclass: getAttrByName(char.id, subclassAttr),
-        };
-    }
-
-    /**
-     * @param {{class:string, classAttr:string, level:number, levelAttr:string, subclass:string, subclassAttr:string}} druid
-     * @returns {{filter:number, maxCr:string}}
-     */
-    function getCR(druid) {
-        let filter;
-        let maxCr;
-        switch (true) {
-            case druid.subclass?.toLowerCase().trim() === "moon" &&
-                druid.level >= 6:
-                // moon druids are treated like normal druids until 6th level
-                filter = Math.floor(Math.max(charLevel / 3, 1));
-                maxCr = filter.toString();
-
-            default:
-                maxCr = druidLevelToCr(druid.level);
-                filter = maxCr.split("/").reduce((a, b) => +a / +b, 0);
-        }
-        return { filter, maxCr };
-    }
-
-    /**
-     * Takes a druid's level and returns the CR limit of beasts that druid can turn into.
-     *
-     * Does not apply to moon druids of >= 6th level.
-     * @param {number} level
-     * @returns {string}
-     */
-    function druidLevelToCr(level) {
-        if (level >= 8) return "1";
-        if (level >= 4) return "1/2";
-        return "1/4";
     }
 
     /**
@@ -338,6 +361,10 @@ on("ready", function() {
         return toChat(beasts, { player: msg.who });
     }
 
+    /** Output the supplied message to chat, optionally as a whisper and/or as an error which will also log to the console.
+     * @param {string} msg
+     * @param {{code:number, player:string, logMsg:string}} options
+     */
     const toChat = function (
         msg,
         { code = undefined, player = undefined, logMsg = undefined } = {}
@@ -352,7 +379,9 @@ on("ready", function() {
             log(AWS_log + (logMsg || msg) + " Error code " + code + ".");
     };
 
-    /* Old code below this point|====================================================| */
+    /* -------------------------------------------------------------------------- */
+    /*                          Old code below this point                         */
+    /* -------------------------------------------------------------------------- */
 
     function AutomaticWildShape(msg, token, char) {
         if (AWS_debug) {
