@@ -32,10 +32,7 @@ on("ready", function () {
             if (char instanceof Druid) return Object.assign(this, char);
             // Apply all the properties to `this` while maintaining property names.
             Object.assign(this, this.getDetails(char));
-            Object.assign(
-                this,
-                this.override ? { maxCr: "99", filter: 99 } : this.getCr(level)
-            );
+            Object.assign(this, this.getCr(level));
         }
 
         /** Takes a player Character object and returns all the parts needed for wild shape calculations.
@@ -327,6 +324,7 @@ on("ready", function () {
     function giveBeastList(msg) {
         // TODO error messages
         // TODO deal with `aws_override`
+        // TODO convert straight into moon druid when appropriate
         const char = charFromMessage(msg);
         if (!char) return toChat("No char sheet", { code: 31 }); //TODO accept if GM
         let druid = new Druid(char);
