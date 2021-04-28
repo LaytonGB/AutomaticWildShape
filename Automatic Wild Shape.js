@@ -328,6 +328,7 @@ on("ready", function () {
      * @param {ChatEventData} msg
      */
     function listAdd(msg) {
+        // TODO error handling
         const token = tokenFromMessage(msg);
         const beastId = token._characterid;
         return createObj("attribute", {
