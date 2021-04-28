@@ -42,7 +42,7 @@ on("ready", function () {
         getDetails(char) {
             let classIndex = -1;
             let classAttrVal = getAttrByName(char.id, "class");
-            if (classAttrVal?.toLowerCase() === "druid") classIndex = 0;
+            if (classAttrVal.toLowerCase() === "druid") classIndex = 0; // TODO optional chaining should be here
             // if the class was not in the default attribute we need to check the 4 multiclasses
             else {
                 for (let i = 1; i <= 4; i++) {
@@ -52,7 +52,7 @@ on("ready", function () {
                         getAttrByName(
                             char.id,
                             `multiclass${i}`
-                        )?.toLowerCase() === "druid"
+                        ).toLowerCase() === "druid" // TODO optional chaining should be here
                     ) {
                         classIndex = i;
                         break;
@@ -161,6 +161,7 @@ on("ready", function () {
     first GM and create the macro as that GM. */
     const checkMacros = (function () {
         const onlinePlayers = findObjs({ _type: "player", _online: true });
+        const onlineGms = onlinePlayers.filter(p => playerIsGM(p.id));
         const existantMacros = findObjs({ _type: "macro" });
         const gmMacros = [
             {
@@ -168,17 +169,17 @@ on("ready", function () {
                 action: "!aws",
             },
             {
+                name: "AWSlist",
+                action: "!aws list",
+            },
+            {
                 name: "AWSadd",
                 visibleto: "all",
-                action: "!aws add",
+                action: "!aws list add",
             },
             {
                 name: "AWSremove",
-                action: "!aws remove",
-            },
-            {
-                name: "AWSlist",
-                action: "!aws list",
+                action: "!aws list remove",
             },
             {
                 name: "AWSpopulate",
@@ -186,18 +187,18 @@ on("ready", function () {
             },
         ];
         gmMacros.forEach((m) => {
-            const thisMacro = existantMacros.find((e) => e.name === m.name);
+            const thisMacro = existantMacros.find((e) => e.get("name") === m.name);
             if (thisMacro) return;
-            onlinePlayers.forEach((p) => {
+            onlineGms.some((p) => {
                 if (!playerIsGM(p.id)) return;
                 createObj("macro", {
                     action: m.action,
                     name: m.name,
                     playerid: p.id,
-                    visibleto: "all",
+                    visibleto: m.visibleto || "",
                 });
-                sendChat(AST_name, `/w gm Created **${m.name}** macro.`);
-                break;
+                toChat(`/w gm Created **${m.name}** macro.`, { player: p.name });
+                return true; // stop finding GMs once the macro has been created.
             });
         });
     })();
@@ -218,7 +219,7 @@ on("ready", function () {
         function transformOptions() {
             if (
                 msg.selected.length !== 1 ||
-                msg.selected._type[0] !== "graphic"
+                msg.selected?.[0]._type !== "graphic"
             )
                 return toChat("A token must be selected.", {
                     code: 11,
@@ -296,6 +297,24 @@ on("ready", function () {
             return populateList(msg);
         }
     });
+
+    /** Returns a list that is filtered appropriately for the selected druid PC.
+     * @param {ChatEventData} msg
+     */
+    function giveBeastList(msg) {
+        // TODO error messages
+        // TODO deal with `aws_override`
+        // TODO convert straight into moon druid when appropriate
+        const char = charFromMessage(msg);
+        if (!char) return toChat("No char sheet", { code: 31 }); //TODO accept if GM
+        let druid = new Druid(char);
+        if (!druid) return toChat("No attrs from char.", { code: 32 });
+        if (druid.level < 2) return toChat("Lvl too low.", { code: 33 });
+        if (druid.subclass.toLowerCase().trim() === "moon") // TODO add optional chaining
+            druid = MoonDruid(druid);
+        const beasts = filterBeasts(druid.filter);
+        return listToChat(beasts);
+    }
 
     /** Returns a filtered array of beasts based on the supplied CR.
      * @param {number} filter
@@ -399,6 +418,23 @@ on("ready", function () {
             `&{template:default}{{Name=**${tableName}**}}`
         );
         return toChat(beasts, { player: msg.who });
+    }
+
+    /**
+     * @param {ChatEventData} msg
+     * @returns {Character | undefined}
+     */
+    function tokenFromMessage(msg) {
+        return getObj("graphic", msg.selected[0]._id);
+    }
+
+    /**
+     * @param {ChatEventData} msg
+     * @returns {Character | undefined}
+     */
+    function charFromMessage(msg) {
+        const token = tokenFromMessage(msg);
+        return getObj("character", token._characterid); // TODO add optional chaining
     }
 
     /** Output the supplied message to chat, optionally as a whisper and/or as an error which will also log to the console.
