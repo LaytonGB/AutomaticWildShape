@@ -229,7 +229,6 @@ on("ready", function () {
         if (parts.length === 1) return transformOptions();
         if (parts[1] === "list") return listOptions();
         if (parts[1] === "populate") return populateOptions();
-        // Must come last in list because other commands have set variables (unlike <beast_name>)
         return transformOptions();
 
         /** Options for transforming the selected token. */
@@ -313,7 +312,7 @@ on("ready", function () {
                     "You must be a GM to populate the wild shapes list.",
                     { code: 18, player: msg.who }
                 );
-            return populateList();
+            return populateList(msg);
         }
     });
 
@@ -352,11 +351,7 @@ on("ready", function () {
             _type: "attribute",
             name: "ws",
         });
-        if (attrs.length < 1)
-            return toChat("There are no sheets in the wild shape list.", {
-                code: 21,
-                player: msg.who,
-            });
+        if (attrs.length === 0) return [];
         return attrs
             .map((a) => getObj("character", a.get("_characterid")))
             .filter((a) => a !== undefined)
@@ -368,12 +363,20 @@ on("ready", function () {
      */
     function listAdd(msg) {
         // TODO error handling
-        const token = tokenFromMessage(msg);
-        const beastId = token.get("_characterid");
-        return createObj("attribute", {
-            _characterid: beastId,
-            name: "ws",
-            current: "1",
+        const tokens = tokensFromMessage(msg);
+        tokens.forEach((t) => {
+            const beastId = t.get("represents");
+            createObj("attribute", {
+                _characterid: beastId,
+                name: "ws",
+                current: "1",
+            });
+            toChat(
+                `Added the character representing "${t.get(
+                    "name"
+                )}" to the wildshape list.`,
+                { player: msg.who }
+            );
         });
     }
 
@@ -384,10 +387,40 @@ on("ready", function () {
         listRemoveSelected(msg);
     }
 
+    /** Removes the named beast from the beast list.
+     * @param {ChatEventData} msg
+     */
     function listRemoveNamed(msg) {
-        // TODO error handling
+        const name = msg.content.replace("!aws list remove ", "");
+        const chars = findObjs({
+            _type: "character",
+            name: name,
+        });
+        if (chars.length === 0)
+            return toChat(`No beast found with name "${name}".`);
+        if (chars.length > 1)
+            return toChat(
+                `Couldn't find beast: More than one character exists with the name "${name}".`,
+                { code: 42, player: msg.who }
+            );
+        const char = chars[0];
+        const attrs = findObjs({
+            _type: "attribute",
+            _characterid: char.id,
+            name: "ws",
+        });
+        if (attrs.length === 0)
+            return toChat(`Character "${name}" has no wildshape attribute.`, {
+                code: 43,
+                player: msg.who,
+            });
+        attrs.forEach((a) => a.remove());
+        toChat(`Removed "${name}" from wildshape list.`, { player: msg.who });
     }
 
+    /** Removes the selected token(s) from the beast list.
+     * @param {ChatEventData} msg
+     */
     function listRemoveSelected(msg) {
         // TODO error handling
         const tokens = tokensFromMessage(msg);
@@ -411,11 +444,11 @@ on("ready", function () {
         });
         const out1 = removed.reduce(
             (a, b) => a + `<br>${b.get("name")}`,
-            `Successfully removed these tokens from the list:`
+            `Removed these tokens from the list:`
         );
         const out2 = missingWs.reduce(
             (a, b) => a + `<br>${b.get("name")}`,
-            `Could not remove these tokens from the list:`
+            `Couldn't remove these tokens from the list:`
         );
         if (removed !== 0) toChat(out1, { player: msg.who });
         if (missingWs.length !== 0) toChat(out2, { code: 69, player: msg.who });
@@ -441,6 +474,10 @@ on("ready", function () {
         } = {}
     ) {
         const tableName = cr ? "Wild Shapes by CR" : "Wild Shapes by Name";
+        if (beasts.length === 0)
+            return toChat("No beasts in the wildshape list.", {
+                player: msg.who,
+            });
         beasts.sort((a, b) => a.name - b.name);
         if (cr) beasts.sort((a, b) => a.filter - b.filter);
         const output = beasts.reduce(
@@ -457,9 +494,10 @@ on("ready", function () {
     /** Populates the wild shape list with Beast type NPCs by adding a
      * "ws" attribute to their character sheets.
      */
-    function populateList() {
+    function populateList(msg) {
         const beasts = findAllBeasts({ includeExisting: false });
-        if (beasts.length < 1) return toChat("No new beasts detected.");
+        if (beasts.length < 1)
+            return toChat("No new beasts detected.", { player: msg.who });
         let addedBeasts = [];
         beasts.forEach((b) => {
             createObj("attribute", {
@@ -476,7 +514,7 @@ on("ready", function () {
             (a, b) => a + `{{${b.name}=${b.cr}}}`,
             `&{template:default}{{name=New Beasts}}{{**Name**=**CR**}}`
         );
-        toChat(output);
+        return toChat(output, { player: msg.who });
     }
 
     /** Returns an array of all beasts found using their "npc_type" attribute.
@@ -519,6 +557,13 @@ on("ready", function () {
         return getObj("character", token._characterid); // TODO add optional chaining
     }
 
+    /** Takes a string fraction and returns it as a resolved number.
+     * @param {string} str
+     */
+    function fractionToNumber(str) {
+        return str.split("/").reduce((a, b) => +a / +b, 0);
+    }
+
     /** Output the supplied message to chat, optionally as a whisper and/or as an error which will also log to the console.
      * @param {string} msg
      * @param {{code:number, player:string, logMsg:string}} options
@@ -532,17 +577,10 @@ on("ready", function () {
         if (msg)
             sendChat(
                 isError ? AWS_error : AWS_name,
-                `${playerName ? "/w " + playerName + " " : ""}${msg}`
+                `${playerName ? "/w " + playerName + " " : ""}${"<br>" + msg}`
             );
         if (isError)
             log(AWS_log + (logMsg || msg) + " Error code " + code + ".");
-    }
-
-    /** Takes a string fraction and returns it as a resolved number.
-     * @param {string} str
-     */
-    function fractionToNumber(str) {
-        return str.split("/").reduce((a, b) => +a / +b, 0);
     }
 
     /* -------------------------------------------------------------------------- */
