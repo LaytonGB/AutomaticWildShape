@@ -224,7 +224,7 @@ on("ready", function () {
     on("chat:message", function (msg) {
         const parts = msg.content.toLowerCase().split(" ");
         if (msg.type !== "api" || parts[0] !== "!aws") return;
-        if (AWS_notifyGM)
+        if (AWS_notifyGM && !playerIsGM(msg.playerid))
             toChat(`-AWS in use by ${msg.who}-`, { player: "gm" });
         if (parts.length === 1) return transformOptions();
         if (parts[1] === "list") return listOptions();
@@ -256,7 +256,7 @@ on("ready", function () {
             !aws end => end transformation
             !aws <beast_name> => transform into beast
             */
-            if (parts.length === 1) return giveBeastList(msg);
+            if (parts.length === 1) return giveShapeList(msg);
             if (parts[1] === "end") return endTransform(msg);
             return transform(msg);
         }
@@ -268,10 +268,10 @@ on("ready", function () {
          * !aws list remove => Remove the sheets listed by their ID(s).
          */
         function listOptions() {
-            if (AWS_debug) return toChat("listOptions() reached");
-            if (parts.length === 2) if (listAll(msg)) return listToChat(attrs);
+            if (parts.length === 2)
+                return listToChat(msg, { cr: true, remove: true });
 
-            if (parts[1] === "add") {
+            if (parts[2] === "add") {
                 if (!playerIsGM(msg.playerid))
                     return toChat(
                         "You must be a GM to alter the wild shapes list.",
@@ -286,7 +286,7 @@ on("ready", function () {
                 return listAdd(msg);
             }
 
-            if (parts[1] === "remove") {
+            if (parts[2] === "remove") {
                 if (!playerIsGM(msg.playerid))
                     return toChat(
                         "You must be a GM to alter the wild shapes list.",
@@ -320,7 +320,7 @@ on("ready", function () {
     /** Returns a list that is filtered appropriately for the selected druid PC.
      * @param {ChatEventData} msg
      */
-    function giveBeastList(msg) {
+    function giveShapeList(msg) {
         // TODO error messages
         // TODO deal with `aws_override`
         // TODO convert straight into moon druid when appropriate
@@ -341,13 +341,13 @@ on("ready", function () {
      * @returns {Beast[]}
      */
     function filterBeasts(filter) {
-        return listAll.filter((a) => a.filter <= filter);
+        return getAllShapes.filter((a) => a.filter <= filter);
     }
 
-    /** Outputs a list of all wild shapes with some details.
+    /** Returns a list of all wild shapes with some details.
      * @returns {Beast[]}
      */
-    function listAll() {
+    function getAllShapes() {
         const attrs = findObjs({
             _type: "attribute",
             name: "ws",
@@ -358,18 +358,18 @@ on("ready", function () {
                 player: msg.who,
             });
         return attrs
-            .map((a) => getObj("character", a._characterid))
+            .map((a) => getObj("character", a.get("_characterid")))
             .filter((a) => a !== undefined)
             .map((a) => new Beast(a));
     }
 
-    /** Adds the selected token to the list of wildshapes.
+    /** Adds the selected token(s) to the list of wildshapes.
      * @param {ChatEventData} msg
      */
     function listAdd(msg) {
         // TODO error handling
         const token = tokenFromMessage(msg);
-        const beastId = token._characterid;
+        const beastId = token.get("_characterid");
         return createObj("attribute", {
             _characterid: beastId,
             name: "ws",
@@ -377,10 +377,55 @@ on("ready", function () {
         });
     }
 
+    /** Removes the seleted token(s) or named beasts from the beast list. */
+    function listRemove(msg) {
+        // TODO error handling
+        if (msg.content.split(" ").length > 3) return listRemoveNamed(msg);
+        listRemoveSelected(msg);
+    }
+
+    function listRemoveNamed(msg) {
+        // TODO error handling
+    }
+
+    function listRemoveSelected(msg) {
+        // TODO error handling
+        const tokens = tokensFromMessage(msg);
+        const removed = [];
+        const missingWs = [];
+        const charIds = tokens ? tokens.map((t) => t.get("represents")) : [];
+        if (charIds.length === 0)
+            return toChat(
+                "No tokens were selected and no beast name was provided.",
+                { code: 41, player: msg.who }
+            );
+        const attrs = findObjs({
+            _type: "attribute",
+            name: "ws",
+        });
+        charIds.forEach((id, i) => {
+            const attr = attrs.find((a) => id === a.get("_characterid"));
+            if (!attr) return (missingWs[i] = tokens[i]);
+            attr.remove();
+            removed[i] = tokens[i];
+        });
+        const out1 = removed.reduce(
+            (a, b) => a + `<br>${b.get("name")}`,
+            `Successfully removed these tokens from the list:`
+        );
+        const out2 = missingWs.reduce(
+            (a, b) => a + `<br>${b.get("name")}`,
+            `Could not remove these tokens from the list:`
+        );
+        if (removed !== 0) toChat(out1, { player: msg.who });
+        if (missingWs.length !== 0) toChat(out2, { code: 69, player: msg.who });
+    }
+
     /** Make a table out of the supplied attribute's sheets ready to post to chat.
      * @param {ChatEventData} msg
-     * @param {Beast[]} beasts
-     * @param {{cr?:boolean, remove?:boolean, transform?:boolean}} options If `cr = true` then beast CR will be shown and beasts will be sorted by CR.
+     * @param {{beasts:Beast[], cr?:boolean, remove?:boolean, transform?:boolean}} options If `beasts` is not supplied, a list of all beasts is used.
+     *
+     * If `cr = true` then beast CR will be shown and beasts will be sorted by CR.
      *
      * If `remove = true` then a button will be provided beside each beast that, when clicked by a GM, will remove the beast from the wild shapes list.
      *
@@ -388,21 +433,25 @@ on("ready", function () {
      */
     function listToChat(
         msg,
-        beasts,
-        { cr = false, remove = false, transform = false } = {}
+        {
+            beasts = getAllShapes(),
+            cr = false,
+            remove = false,
+            transform = false,
+        } = {}
     ) {
         const tableName = cr ? "Wild Shapes by CR" : "Wild Shapes by Name";
         beasts.sort((a, b) => a.name - b.name);
         if (cr) beasts.sort((a, b) => a.filter - b.filter);
-        beasts.reduce(
+        const output = beasts.reduce(
             (a, b) =>
                 a +
-                `{{${b.name}=${cr ? b.cr : ""} ${
+                `{{${cr ? `CR ${b.cr} ` : ""}${b.name}=${
                     transform ? `[✓](!<br>aws ${b.name})` : ""
-                }${remove ? `[X](!<br>aws list remove ${b.name})` : ""}}}`,
-            `&{template:default}{{Name=**${tableName}**}}`
+                }${remove ? `[✗](!<br>aws list remove ${b.name})` : ""}}}`,
+            `&{template:default}{{name=${tableName}}}`
         );
-        return toChat(beasts, { player: msg.who });
+        return toChat(output, { player: msg.who });
     }
 
     /** Populates the wild shape list with Beast type NPCs by adding a
@@ -424,14 +473,13 @@ on("ready", function () {
             });
         });
         const output = addedBeasts.reduce(
-            (a, b) =>
-                a + `{{${b.name}=${b.cr}}}`,
+            (a, b) => a + `{{${b.name}=${b.cr}}}`,
             `&{template:default}{{name=New Beasts}}{{**Name**=**CR**}}`
         );
         toChat(output);
     }
 
-    /** Find all beasts based on the "npc_type" attribute.
+    /** Returns an array of all beasts found using their "npc_type" attribute.
      *
      * Optionally filters away any sheets that have the "ws" attribute.
      * @param {{includeExisting:boolean}}
@@ -440,15 +488,14 @@ on("ready", function () {
     function findAllBeasts({ includeExisting = true }) {
         return findObjs({ _type: "character" }).filter(
             (c) =>
-                getAttrByName(c.id, "npc_type")
-                    .search(/beast/i) !== -1 &&
+                getAttrByName(c.id, "npc_type").search(/beast/i) !== -1 &&
                 (includeExisting || !getAttrByName(c.id, "ws"))
         );
     }
 
     /**
      * @param {ChatEventData} msg
-     * @returns {Character | undefined}
+     * @returns {Graphic}
      */
     function tokenFromMessage(msg) {
         return getObj("graphic", msg.selected[0]._id);
@@ -456,7 +503,16 @@ on("ready", function () {
 
     /**
      * @param {ChatEventData} msg
-     * @returns {Character | undefined}
+     * @returns {Graphic[]}
+     */
+    function tokensFromMessage(msg) {
+        const tokens = msg.selected;
+        return tokens && tokens.map((t) => getObj("graphic", t._id));
+    }
+
+    /**
+     * @param {ChatEventData} msg
+     * @returns {Character}
      */
     function charFromMessage(msg) {
         const token = tokenFromMessage(msg);
