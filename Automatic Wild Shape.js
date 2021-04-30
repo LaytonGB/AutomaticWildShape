@@ -1,18 +1,24 @@
-// keep turn order for shape changed creature
+// TODO integrate Jack of All Trades bonus
+// TODO keep turn order for shape changed creature
 
 // Automatic Wild Shape
 on("ready", function () {
+    "use strict";
     log("Automatic Wild Shape API Ready!");
 
     /* -------------------------------------------------------------------------- */
     /*                                   Options                                  */
     /* -------------------------------------------------------------------------- */
-    // Settings
-    const AWS_notifyGM = true;
-    const AWS_hpbar = 3;
-
-    // Debug
-    const AWS_debug = true;
+    const AWS_notifyGM = true; // Notify all GMs whenever the API is used by a player.
+    const AWS_hpbar = 3; // The token bar used for hp (can be 1, 2, or 3).
+    // When calculating wild shape skill bonuses the rules are a little vague
+    // regarding whether the player's proficiency bonus or the beast's proficiency
+    // bonus should be applied to skills that the player is proficient in.
+    // Set this to true to use the player's bonus, which will almost always be higher.
+    const AWS_usePlayerProfBonus = false;
+    // If a player has expertise in a skill then allow them to make use of it in their
+    // wildshapes.
+    const AWS_usePlayerExpertise = false;
 
     /* -------------------------------- Constants ------------------------------- */
     const AWS_name = "AWS";
@@ -113,7 +119,7 @@ on("ready", function () {
         calcCr(level = this.level) {
             return {
                 maxCr: this.druidLevelToCr(level),
-                filter: fractionToNumber(maxCr),
+                filter: crStringToNumber(maxCr),
             };
         }
 
@@ -158,7 +164,7 @@ on("ready", function () {
         constructor(char) {
             const cr = getAttrByName(char.id, "npc_challenge");
             this.cr = cr;
-            this.filter = fractionToNumber(cr);
+            this.filter = crStringToNumber(cr);
             this.id = char.id;
             this.name = char.get("name");
             this.sheet = char;
@@ -233,7 +239,6 @@ on("ready", function () {
 
         /** Options for transforming the selected token. */
         function transformOptions() {
-            if (AWS_debug) return toChat("transformOptions() reached");
             if (
                 msg.selected.length !== 1 ||
                 msg.selected[0]._type !== "graphic" // TODO add optional chaining
@@ -242,9 +247,12 @@ on("ready", function () {
                     code: 11,
                     player: msg.who,
                 });
+            const char = charFromMessage(msg);
             if (
                 !playerIsGM(msg.playerid) &&
-                !new RegExp("all|" + msg.who, "i").test()
+                !new RegExp("all|" + msg.who, "i").test(
+                    char.get("controlledby")
+                )
             )
                 return toChat("You must control the selected token.", {
                     code: 12,
@@ -253,11 +261,11 @@ on("ready", function () {
             /*
             !aws => return list of transform options
             !aws end => end transformation
-            !aws <beast_name> => transform into beast
+            !aws <beastName> => transform into beast
             */
             if (parts.length === 1) return giveShapeList(msg);
             if (parts[1] === "end") return endTransform(msg);
-            return transform(msg);
+            return wildShape(msg);
         }
 
         /** !aws list => Show the complete wild shapes list to this user.
@@ -320,7 +328,7 @@ on("ready", function () {
      * @param {ChatEventData} msg
      */
     function giveShapeList(msg) {
-        // TODO error messages
+        // FIXME error messages
         // TODO deal with `aws_override`
         // TODO convert straight into moon druid when appropriate
         const char = charFromMessage(msg);
@@ -332,7 +340,185 @@ on("ready", function () {
             // TODO add optional chaining
             druid = MoonDruid(druid);
         const beasts = filterBeasts(druid.filter);
-        return listToChat(beasts);
+        return listToChat(beasts, { cr: true, transform: true });
+    }
+
+    /*
+    use message selected to get PC
+    use beast id to get beast sheet
+    create a new sheet controllable by the same people as the character
+    for each of the skills and saves, use the higher of beast ability + player prof, or just beast skill
+    */
+    function wildShape(msg) {
+        const { beast, token, char, pageId } = getTransformDetails(msg);
+        if (!(beast && token && char && pageId))
+            return toChat(
+                "Couldn't get the data required for transformation.",
+                { code: 52, player: msg.who }
+            );
+        const sheet = initializeSheet(beast, char, token);
+        if (!sheet)
+            return toChat(
+                "Could not initialize a new character sheet for transformation.",
+                { code: 53, player: msg.who }
+            );
+        const { skills, profSkills } = getSkillDetails(char);
+        applyPlayerProfs(char, sheet, profSkills);
+    }
+
+    /** Returns the details required to transform using wild shape.
+     * @param {ChatEventData} msg
+     * @returns {{beast:Character, token:Graphic, char:Character, pageId:string}}
+     */
+    function getTransformDetails(msg) {
+        const beastId = msg.content.replace("!aws ", "");
+        const beast = getObj("character", beastId);
+        if (!beast)
+            return toChat(`No beast found with ID "${beastId}".`, {
+                code: 51,
+                player: msg.who,
+            });
+        const token = tokenFromMessage(msg);
+        const char = charFromToken(token);
+        const pageId = Campaign().get("playerpageid");
+        return { beast, token, char, pageId };
+    }
+
+    /** Returns a sheet initialized with the supplied beast and character's data
+     * as per the wildshape rules.
+     * @param {Character} beast
+     * @param {Character} char
+     * @param {Graphic} token
+     */
+    function initializeSheet(beast, char, token) {
+        const attrs = findObjs({
+            _type: "attribute",
+            _characterid: beast.id,
+        });
+        const sheet = createObj("character", {
+            avatar: beast.get("avatar"),
+            controlledby: char.get("controlledby"),
+            name: `${beast.get("name")} ${token.get("name")}`,
+        });
+        attrs.forEach((a) => {
+            if (a.get("name") === "ws") return;
+            let current = a.get("current");
+            if (new RegExp(/intelligence|wisdom|charisma/i).test(a.get("name")))
+                current = getAttrByName(char.id, a.get("name"));
+            createObj("attribute", {
+                _characterid: sheet.id,
+                name: a.get("name"),
+                current,
+            });
+        });
+        createObj("ability", {
+            _characterid: sheet.id,
+            name: "~EndWildShape",
+            action: "!aws end",
+            istokenaction: true,
+        });
+        return sheet;
+    }
+
+    /** Returns an object containing all skills and  */
+    function getSkillDetails(char) {
+        const skills = {
+            strength: ["strength_save", "athletics"],
+            dexterity: [
+                "dexterity_save",
+                "acrobatics",
+                "sleight_of_hand",
+                "stealth",
+            ],
+            constitution: ["constitution_save"],
+            intelligence: [
+                "intelligence_save",
+                "arcana",
+                "history",
+                "investigation",
+                "nature",
+                "religion",
+            ],
+            wisdom: [
+                "wisdom_save",
+                "animal_handling",
+                "insight",
+                "medicine",
+                "perception",
+                "survival",
+            ],
+            charisma: [
+                "charisma_save",
+                "deception",
+                "intimidation",
+                "performance",
+                "persuasion",
+            ],
+        };
+
+        const profSkills = {
+            strength: [],
+            dexterity: [],
+            constitution: [],
+            intelligence: [],
+            wisdom: [],
+            charisma: [],
+        };
+        for (const k in skills) {
+            for (const s in skills[k]) {
+                const prof = getAttrByName(char.id, s + "_prof");
+                if (prof && prof !== "0") profSkills[k].push(skills[k]);
+            }
+        }
+        return { skills, profskills };
+    }
+
+    /** Calculates the appropriate skill bonuses based on the character and beast
+     * proficiencies and applies them to the sheet.
+     * @param skills
+     * @param profSkills
+     * @param {Character} sheet
+     */
+    function applyPlayerProfs(char, sheet, profSkills) {
+        /*
+        relevant bonus <- beast or player proficiency bonus
+        for each of the player's proficiencies
+            get the bonus for comparison
+            compare it to existing bonus
+            set sheet stat to keep highest
+        */
+        const profBonus = AWS_usePlayerProfBonus
+            ? +char.get("pb")
+            : +getNpcProfBonus(sheet); // FIXME error handle
+        for (const attr in profSkills) {
+            const modName = attr + "_mod";
+            const beastMod = +getAttrByName(sheet.id, modName); // FIXME error handle
+            for (let skillName in profSkills[attr]) {
+                skillName = "npc_" + skillName;
+                if (skillName.includes("_save"))
+                    skillName =
+                        skillName.substr(0, 7) +
+                        skillName.substr(skillName.indexOf("_save"));
+                const skillFlag = getAttrByName(sheet.id, skillName + "_flag");
+                const skillBonus = getAttrByName(sheet.id, skillName);
+                if (!skillFlag || (!skillBonus && skillBonus !== "0")) {
+                    setAttrByName(sheet.id, skillName, beastMod + profBonus);
+                    continue;
+                }
+                const newBonus = beastMod + profBonus;
+                if (skillBonus < newBonus)
+                    setAttrByName(sheet.id, skillName, newBonus.toString());
+            }
+        }
+    }
+
+    /** Returns the proficiency bonus an npc should have based on its CR.
+     * @param {Character} npc
+     * @returns {number}
+     */
+    function getNpcProfBonus(npc) {
+        const cr = npc.get("npc_challenge");
+        return Math.max(Math.ceil(crStringToNumber(cr) / 4) + 1, 2);
     }
 
     /** Returns a filtered array of beasts based on the supplied CR.
@@ -362,7 +548,7 @@ on("ready", function () {
      * @param {ChatEventData} msg
      */
     function listAdd(msg) {
-        // TODO error handling
+        // FIXME error handling
         const tokens = tokensFromMessage(msg);
         tokens.forEach((t) => {
             const beastId = t.get("represents");
@@ -382,7 +568,7 @@ on("ready", function () {
 
     /** Removes the seleted token(s) or named beasts from the beast list. */
     function listRemove(msg) {
-        // TODO error handling
+        // FIXME error handling
         if (msg.content.split(" ").length > 3) return listRemoveNamed(msg);
         listRemoveSelected(msg);
     }
@@ -422,7 +608,7 @@ on("ready", function () {
      * @param {ChatEventData} msg
      */
     function listRemoveSelected(msg) {
-        // TODO error handling
+        // FIXME error handling
         const tokens = tokensFromMessage(msg);
         const removed = [];
         const missingWs = [];
@@ -484,7 +670,7 @@ on("ready", function () {
             (a, b) =>
                 a +
                 `{{${cr ? `CR ${b.cr} ` : ""}${b.name}=${
-                    transform ? `[✓](!<br>aws ${b.name})` : ""
+                    transform ? `[✓](!<br>aws ${b.id})` : ""
                 }${remove ? `[✗](!<br>aws list remove ${b.name})` : ""}}}`,
             `&{template:default}{{name=${tableName}}}`
         );
@@ -549,19 +735,52 @@ on("ready", function () {
     }
 
     /**
+     * @param {Graphic} token
+     * @returns {Character}
+     */
+    function charFromToken(token) {
+        return getObj("character", token._characterid);
+    }
+
+    /**
      * @param {ChatEventData} msg
      * @returns {Character}
      */
     function charFromMessage(msg) {
         const token = tokenFromMessage(msg);
-        return getObj("character", token._characterid); // TODO add optional chaining
+        return charFromToken(token); // TODO add optional chaining
     }
 
-    /** Takes a string fraction and returns it as a resolved number.
+    /** Takes a string number and returns it as a resolved number.
      * @param {string} str
      */
-    function fractionToNumber(str) {
+    function crStringToNumber(str) {
+        if (!str.includes("/")) return +str;
         return str.split("/").reduce((a, b) => +a / +b, 0);
+    }
+
+    /** Sets the value of an attribute's `current` property.
+     * @param {string} _characterid
+     * @param {string} name
+     * @param {string} current
+     */
+    function setAttrByName(_characterid, name, current) {
+        const attrs = findObjs({
+            _type: "attribute",
+            _characterid,
+            name,
+        });
+        if (attrs.length === 0)
+            return toChat(`Attribute by name "${name}" could not be found.`, {
+                code: 71,
+                player: msg.who,
+            });
+        if (attrs.length > 1)
+            return toChat(`Multiple attributes found with name "${name}".`, {
+                code: 72,
+                player: msg.who,
+            });
+        attrs[0].set("current", current);
     }
 
     /** Output the supplied message to chat, optionally as a whisper and/or as an error which will also log to the console.
