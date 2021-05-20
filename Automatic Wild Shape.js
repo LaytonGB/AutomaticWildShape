@@ -567,13 +567,17 @@ on("ready", function () {
         }
       );
     }
+    if (Object.values(profSkills).some((attr) => attr.length > 0))
+      setAttrByName(msg, sheet.id);
     // set appropriate bonuses for skills
+    // FIXME URGENT this isnt working
     for (const attr in profSkills) {
       const modName = attr + "_mod";
       const beastMod = +getAttrByName(sheet.id, modName); // FIXME error handle
       for (let s of profSkills[attr]) {
         let skillName = "npc_" + s;
         // dexterity_save => npc_dex_save
+        // FIXME enable this to show on sheet with intelligence_flag = 1
         if (skillName.includes("_save"))
           skillName =
             skillName.substr(0, 7) +
@@ -636,7 +640,8 @@ on("ready", function () {
         toChat(
           `${druidToken.get("name")} transformed into a ${target
             .get("name")
-            .replace(druidToken.get("name") + " ", "")}!`
+            .replace(druidToken.get("name"), "")
+            .trim()}!`
         );
         druidToken.remove();
       } catch (error) {
