@@ -11,6 +11,7 @@ on("ready", function () {
   /* -------------------------------------------------------------------------- */
   const AWS_notifyGM = true; // Notify all GMs whenever the API is used by a player.
   const AWS_hpbar = 3; // The token bar used for hp (can be 1, 2, or 3).
+  const AWS_rollHp = false; // Roll for max beast HP. // FIXME not yet implemented
   // When calculating wild shape skill bonuses the rules are a little vague
   // regarding whether the player's proficiency bonus or the beast's proficiency
   // bonus should be applied to skills that the player is proficient in.
@@ -19,6 +20,7 @@ on("ready", function () {
   // If a player has expertise in a skill then allow them to make use of it in their
   // wildshapes.
   const AWS_usePlayerExpertise = false; // TODO not yet integrated
+  // FIXME URGENT error check the settings
 
   /* -------------------------------- Constants ------------------------------- */
   const AWS_name = "AWS";
@@ -28,7 +30,8 @@ on("ready", function () {
 
   /* --------------------------------- Classes -------------------------------- */
 
-  /** A class that represents any druid, and contains functions to get the max CR of the druid's wild shapes.
+  /**
+   * A class that represents any druid, and contains functions to get the max CR of the druid's wild shapes.
    * @param {string} id
    * @param {string} override
    * @param {string} class
@@ -55,7 +58,8 @@ on("ready", function () {
       }
     }
 
-    /** Takes a player Character object and returns all the parts needed for wild shape calculations.
+    /**
+     * Takes a player Character object and returns all the parts needed for wild shape calculations.
      * @param {Character} char
      * @returns {{id:string, override:string, class:string, classAttr:string, level:number, levelAttr:string, subclass:string, subclassAttr:string}}
      */
@@ -107,13 +111,15 @@ on("ready", function () {
       };
     }
 
-    /** Returns max wildshape CR accounting for the override. */
+    /**
+     * Returns max wildshape CR accounting for the override. */
     getCr(level = this.level) {
       if (this.override) return { maxCr: "99", filter: 99 };
       return this.calcCr(level);
     }
 
-    /** Calculates max wildshape CR based on supplied level or `this.level`.
+    /**
+     * Calculates max wildshape CR based on supplied level or `this.level`.
      * @returns {{maxCr:string, filter:number}}
      */
     calcCr(level = this.level) {
@@ -125,7 +131,8 @@ on("ready", function () {
       };
     }
 
-    /** Takes a druid's level and returns the CR limit of beasts that druid can turn into.
+    /**
+     * Takes a druid's level and returns the CR limit of beasts that druid can turn into.
      *
      * Does not apply to moon druids of >= 6th level.
      * @param {number} level
@@ -146,7 +153,8 @@ on("ready", function () {
       super(druid);
     }
 
-    /** Calculates max wildshape CR based on supplied level or `this.level` for Moon Druids.
+    /**
+     * Calculates max wildshape CR based on supplied level or `this.level` for Moon Druids.
      * @returns {{maxCr:string, filter:number}}
      */
     calcCr(level = this.level) {
@@ -239,7 +247,8 @@ on("ready", function () {
     if (parts[1] === "populate") return populateOptions();
     return transformOptions();
 
-    /** Options for transforming the selected token.
+    /**
+     * Options for transforming the selected token.
      *
      * !aws => return list of transform options
      *
@@ -278,7 +287,8 @@ on("ready", function () {
       // }
     }
 
-    /** !aws list => Show the complete wild shapes list to this user.
+    /**
+     * !aws list => Show the complete wild shapes list to this user.
      *
      * !aws list add => Add the currently selected token(s) to the wild shapes list.
      *
@@ -318,7 +328,8 @@ on("ready", function () {
       );
     }
 
-    /** !aws populate => Search all character sheets and add any sheet with type "beast" to the wild shapes list. */
+    /**
+     * !aws populate => Search all character sheets and add any sheet with type "beast" to the wild shapes list. */
     function populateOptions() {
       if (parts.length > 2)
         return toChat(
@@ -334,7 +345,8 @@ on("ready", function () {
     }
   });
 
-  /** Returns a list that is filtered appropriately for the selected druid PC.
+  /**
+   * Returns a list that is filtered appropriately for the selected druid PC.
    * @param {ChatEventData} msg
    */
   function giveShapeList(msg) {
@@ -345,7 +357,8 @@ on("ready", function () {
     return listToChat(beasts, { cr: true, transform: true });
   }
 
-  /** Returns a druid or moondruid instance.
+  /**
+   * Returns a druid or moondruid instance.
    * @param {ChatEventData} msg
    * @returns {Druid|MoonDruid}
    */
@@ -373,11 +386,11 @@ on("ready", function () {
   }
 
   /*
-    use message selected to get PC
-    use beast id to get beast sheet
-    create a new sheet controllable by the same people as the character
-    for each of the skills and saves, use the higher of beast ability + player prof, or just beast skill
-    */
+  use message selected to get PC
+  use beast id to get beast sheet
+  create a new sheet controllable by the same people as the character
+  for each of the skills and saves, use the higher of beast ability + player prof, or just beast skill
+  */
   function wildShape(msg) {
     const { beast, token, druid, pageId } = getTransformDetails(msg);
     if (!(druid instanceof Druid && druid.getCr()))
@@ -397,18 +410,16 @@ on("ready", function () {
         { code: 53, player: msg.who }
       );
     const profSkills = getSkillDetails(druid);
-    log(profSkills);
     applyPlayerProfs(msg, druid, sheet, profSkills);
-    try {
-      setDefaultToken(beast, sheet, { alterSize: true });
-    } catch (error) {
-      setDefaultToken(getObj("character", druid.id), sheet, {
-        alterSize: true,
-      });
-    }
+    const beastSize = getNpcSize(beast);
+    transformToken(msg, beast, sheet, {
+      alterSize: beastSize,
+      backupSheet: getObj("character", druid.id),
+    });
   }
 
-  /** Returns the details required to transform using wild shape.
+  /**
+   * Returns the details required to transform using wild shape.
    * @param {ChatEventData} msg
    * @returns {{beast:Character, token:Graphic, druid:Druid, pageId:string}}
    */
@@ -426,7 +437,8 @@ on("ready", function () {
     return { beast, token, druid, pageId };
   }
 
-  /** Returns a sheet initialized with the supplied beast and character's data
+  /**
+   * Returns a sheet initialized with the supplied beast and character's data
    * as per the wildshape rules.
    * @param {Character} beast
    * @param {Character} char
@@ -464,7 +476,8 @@ on("ready", function () {
     return sheet;
   }
 
-  /** Returns an object containing all skills that the provided druid is proficient in.
+  /**
+   * Returns an object containing all skills that the provided druid is proficient in.
    * @param {Druid|MoonDruid} char
    * @returns {{strength:string[],dexterity:string[],constitution:string[],intelligence:string[],wisdom:string[],charisma:string[]}}
    */
@@ -509,13 +522,14 @@ on("ready", function () {
     for (const k in skills) {
       for (const s of skills[k]) {
         const prof = getAttrByName(char.id, s + "_prof");
-        if (prof && prof !== "0") profSkills[k].push(skills[k]);
+        if (prof && prof !== "0") profSkills[k].push(s);
       }
     }
     return profSkills;
   }
 
-  /** Calculates the appropriate skill bonuses based on the character and beast
+  /**
+   * Calculates the appropriate skill bonuses based on the character and beast
    * proficiencies and applies them to the sheet.
    * @param {ChatEventData} msg
    * @param {Druid|MoonDruid} druid
@@ -524,12 +538,12 @@ on("ready", function () {
    */
   function applyPlayerProfs(msg, druid, sheet, profSkills) {
     /*
-        relevant bonus <- beast or player proficiency bonus
-        for each of the player's proficiencies
-            get the bonus for comparison
-            compare it to existing bonus
-            set sheet stat to keep highest
-        */
+    relevant bonus <- beast or player proficiency bonus
+    for each of the player's proficiencies
+      get the bonus for comparison
+      compare it to existing bonus
+      set sheet stat to keep highest
+    */
     const profBonus = AWS_usePlayerProfBonus
       ? +druid.get("pb")
       : +getNpcProfBonus(sheet); // FIXME error handle
@@ -557,8 +571,8 @@ on("ready", function () {
     for (const attr in profSkills) {
       const modName = attr + "_mod";
       const beastMod = +getAttrByName(sheet.id, modName); // FIXME error handle
-      for (let skillName of profSkills[attr]) {
-        skillName = "npc_" + skillName;
+      for (let s of profSkills[attr]) {
+        let skillName = "npc_" + s;
         // dexterity_save => npc_dex_save
         if (skillName.includes("_save"))
           skillName =
@@ -582,19 +596,93 @@ on("ready", function () {
     }
   }
 
-  /** Sets the default token of the target to match that of origin.
-   * @param {Character} origin
-   * @param {Character} target
-   * @param {{alterSize:boolean}}
+  /**
+   * Transforms the selected token into that of the chosen beast.
+   * @param {ChatEventData} msg
+   * @param {Character} origin The beast that has a default token.
+   * @param {Character} target The sheet to copy the beast's default token.
+   * @param {{alterSize:number,backupSheet:Character}}
    */
-  async function setDefaultToken(origin, target, { alterSize } = {}) {
-    await char.get("_defaulttoken", function (t) {
-      const tokenDetails = JSON.parse(t);
-      log(tokenDetails);
+  function transformToken(
+    msg,
+    origin,
+    target,
+    { alterSize, backupSheet } = {}
+  ) {
+    origin.get("_defaulttoken", (t) => {
+      try {
+        if (t === "null") throw new Error("No default token");
+        const tokenData = JSON.parse(t);
+        if (!tokenData.imgsrc.includes("images"))
+          throw new Error("Default token is not user-uploaded");
+        const druidToken = getObj("graphic", msg.selected[0]._id);
+        const imgsrc = tokenData.imgsrc.replace(/\/(max|med|min)\./, "/thumb.");
+        const hp = getAttrByName(origin.id, "hp", "max");
+        Object.assign(tokenData, {
+          represents: target.id,
+          width: alterSize,
+          height: alterSize,
+          imgsrc,
+          name: target.get("name"),
+          pageid: druidToken.get("_pageid"),
+          layer: druidToken.get("layer"),
+          left: druidToken.get("left"),
+          top: druidToken.get("top"),
+          [`bar${AWS_hpbar}_max`]: hp,
+          [`bar${AWS_hpbar}_value`]: hp,
+        });
+        const newToken = createObj("graphic", tokenData);
+        toFront(newToken);
+        toChat(
+          `${druidToken.get("name")} transformed into a ${target
+            .get("name")
+            .replace(druidToken.get("name") + " ", "")}!`
+        );
+        druidToken.remove();
+      } catch (error) {
+        if (backupSheet) {
+          toChat(
+            `Attempting to create default token from character sheet because default sheet had error "${error.message}".`,
+            {
+              code: 101,
+            }
+          );
+          return transformToken(msg, backupSheet, target, { alterSize });
+        }
+        toChat(
+          `Could not create token - transformation aborted due to this error: "${error.message}".`,
+          {
+            code: 101,
+          }
+        );
+      }
     });
   }
 
-  /** Returns the proficiency bonus an npc should have based on its CR.
+  /**
+   * Returns the base dimensions of a token for an NPC. */
+  function getNpcSize(char) {
+    const square = 70;
+    const re = new RegExp(
+      /(Tiny)|(Small|Medium)|(Large)|(Huge)|(Gargantuan)/,
+      "ig"
+    );
+    const beastSize = getAttrByName(char.id, "npc_type");
+    const res = re.exec("medium");
+    if (res === null) return square;
+    // test the groups 1 to 5 only (representing the sizes above)
+    for (let i = 1; i <= 5; i++) {
+      console.log(res[i]);
+      // math here converts sizes to grid squares
+      if (res[i] !== undefined) {
+        return (i - 1 > 0 ? i - 1 : 0.5) * square;
+      }
+    }
+    return square;
+  }
+
+  /**
+   * Returns the proficiency bonus an npc should have based on its CR.
    * @param {Character} npc
    * @returns {number}
    */
@@ -604,7 +692,8 @@ on("ready", function () {
     return Math.max(Math.ceil(crStringToNumber(cr) / 4) + 1, 2);
   }
 
-  /** Returns a filtered array of beasts based on the supplied CR.
+  /**
+   * Returns a filtered array of beasts based on the supplied CR.
    * @param {number} filter
    * @returns {Beast[]}
    */
@@ -612,7 +701,8 @@ on("ready", function () {
     return getAllShapes().filter((a) => a.filter <= filter);
   }
 
-  /** Returns a list of all wild shapes with some details.
+  /**
+   * Returns a list of all wild shapes with some details.
    * @returns {Beast[]}
    */
   function getAllShapes() {
@@ -627,7 +717,8 @@ on("ready", function () {
       .map((a) => new Beast(a));
   }
 
-  /** Adds the selected token(s) to the list of wildshapes.
+  /**
+   * Adds the selected token(s) to the list of wildshapes.
    * @param {ChatEventData} msg
    */
   function listAdd(msg) {
@@ -649,14 +740,16 @@ on("ready", function () {
     });
   }
 
-  /** Removes the seleted token(s) or named beasts from the beast list. */
+  /**
+   * Removes the seleted token(s) or named beasts from the beast list. */
   function listRemove(msg) {
     // FIXME error handling
     if (msg.content.split(" ").length > 3) return listRemoveNamed(msg);
     listRemoveSelected(msg);
   }
 
-  /** Removes the named beast from the beast list.
+  /**
+   * Removes the named beast from the beast list.
    * @param {ChatEventData} msg
    */
   function listRemoveNamed(msg) {
@@ -687,7 +780,8 @@ on("ready", function () {
     toChat(`Removed "${name}" from wildshape list.`, { player: msg.who });
   }
 
-  /** Removes the selected token(s) from the beast list.
+  /**
+   * Removes the selected token(s) from the beast list.
    * @param {ChatEventData} msg
    */
   function listRemoveSelected(msg) {
@@ -723,7 +817,8 @@ on("ready", function () {
     if (missingWs.length !== 0) toChat(out2, { code: 69, player: msg.who });
   }
 
-  /** Make a table out of the supplied attribute's sheets ready to post to chat.
+  /**
+   * Make a table out of the supplied attribute's sheets ready to post to chat.
    * @param {ChatEventData} msg
    * @param {{beasts:Beast[], cr?:boolean, remove?:boolean, transform?:boolean}} options If `beasts` is not supplied, a list of all beasts is used.
    *
@@ -760,7 +855,8 @@ on("ready", function () {
     return toChat(output, { player: msg.who });
   }
 
-  /** Populates the wild shape list with Beast type NPCs by adding a
+  /**
+   * Populates the wild shape list with Beast type NPCs by adding a
    * "ws" attribute to their character sheets.
    */
   function populateList(msg) {
@@ -786,7 +882,8 @@ on("ready", function () {
     return toChat(output, { player: msg.who });
   }
 
-  /** Returns an array of all beasts found using their "npc_type" attribute.
+  /**
+   * Returns an array of all beasts found using their "npc_type" attribute.
    *
    * Optionally filters away any sheets that have the "ws" attribute.
    * @param {{includeExisting:boolean}}
@@ -834,7 +931,8 @@ on("ready", function () {
     return getObj("graphic", msg.selected[0]._id);
   }
 
-  /** Takes a string number and returns it as a resolved number.
+  /**
+   * Takes a string number and returns it as a resolved number.
    * @param {string} str
    */
   function crStringToNumber(str) {
@@ -842,7 +940,8 @@ on("ready", function () {
     return str.split("/").reduce((a, b) => +a / +b);
   }
 
-  /** Sets the value of an attribute's `current` property.
+  /**
+   * Sets the value of an attribute's `current` property.
    * @param {ChatEventData} msg
    * @param {string} _characterid
    * @param {string} name
@@ -867,7 +966,8 @@ on("ready", function () {
     attrs[0].set("current", current);
   }
 
-  /** Output the supplied message to chat, optionally as a whisper and/or as an error which will also log to the console.
+  /**
+   * Output the supplied message to chat, optionally as a whisper and/or as an error which will also log to the console.
    * @param {string} msg
    * @param {{code:number, player:string, logMsg:string}} options
    */
