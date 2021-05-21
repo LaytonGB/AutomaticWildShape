@@ -567,17 +567,18 @@ on("ready", function () {
         }
       );
     }
-    if (Object.values(profSkills).some((attr) => attr.length > 0))
-      setAttrByName(msg, sheet.id);
-    // set appropriate bonuses for skills
-    // FIXME URGENT this isnt working
+    // stop if no proficiencies
+    if (!Object.values(profSkills).some((attr) => attr.length > 0)) return;
+    setAttrByName(msg, sheet.id, "npc_skills_flag", "2");
+    setAttrByName(msg, sheet.id, "npc_saving_flag", "2");
     for (const attr in profSkills) {
       const modName = attr + "_mod";
       const beastMod = +getAttrByName(sheet.id, modName); // FIXME error handle
       for (let s of profSkills[attr]) {
+        // acrobatics => npc_acrobatics
         let skillName = "npc_" + s;
-        // dexterity_save => npc_dex_save
-        // FIXME enable this to show on sheet with intelligence_flag = 1
+        // npc_dexterity_save => npc_dex_save
+        // FIXME to show on sheet enable intelligence_flag = 1
         if (skillName.includes("_save"))
           skillName =
             skillName.substr(0, 7) +
@@ -590,6 +591,7 @@ on("ready", function () {
           skillFlag == 0 ||
           skillBonus === undefined
         ) {
+          setAttrByName(msg, sheet.id, skillName + "_flag", "2");
           setAttrByName(msg, sheet.id, skillName, beastMod + profBonus);
           continue;
         }
@@ -621,7 +623,7 @@ on("ready", function () {
           throw new Error("Default token is not user-uploaded");
         const druidToken = getObj("graphic", msg.selected[0]._id);
         const imgsrc = tokenData.imgsrc.replace(/\/(max|med|min)\./, "/thumb.");
-        const hp = getAttrByName(origin.id, "hp", "max");
+        const hp = getAttrByName(origin.id, "hp", "max"); // TODO add randomized health
         Object.assign(tokenData, {
           represents: target.id,
           width: alterSize,
@@ -673,11 +675,10 @@ on("ready", function () {
       "ig"
     );
     const beastSize = getAttrByName(char.id, "npc_type");
-    const res = re.exec("medium");
+    const res = re.exec(beastSize);
     if (res === null) return square;
     // test the groups 1 to 5 only (representing the sizes above)
     for (let i = 1; i <= 5; i++) {
-      console.log(res[i]);
       // math here converts sizes to grid squares
       if (res[i] !== undefined) {
         return (i - 1 > 0 ? i - 1 : 0.5) * square;
