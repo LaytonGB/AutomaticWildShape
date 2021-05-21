@@ -1,5 +1,6 @@
 // TODO integrate Jack of All Trades bonus
 // TODO keep turn order for shape changed creature
+// TODO check macros whenever a GM comes online
 
 // Automatic Wild Shape
 on("ready", function () {
@@ -217,7 +218,7 @@ on("ready", function () {
       );
       if (thisMacro) return;
       const duplicateMacro = existantMacros.find(
-        (e) => e.get("name") === m.name
+        (e) => e.get("name") === thisMacro.get("name")
       );
       if (duplicateMacro) duplicateMacro.remove();
       onlineGms.some((p) => {
@@ -245,7 +246,11 @@ on("ready", function () {
     if (parts.length === 1) return transformOptions();
     if (parts[1] === "list") return listOptions();
     if (parts[1] === "populate") return populateOptions();
-    return transformOptions();
+    if (parts[1] === "transform") return transformOptions();
+    return toChat(`Did not understand message "${msg.content}"`, {
+      code: 0,
+      player: msg.who,
+    });
 
     /**
      * Options for transforming the selected token.
@@ -254,37 +259,37 @@ on("ready", function () {
      *
      * !aws end => end transformation
      *
-     * !aws <beastName> => transform into beast
+     * !aws transform <beastName> => transform into beast
      */
     function transformOptions() {
-      if (
-        msg.selected.length !== 1 ||
-        msg.selected[0]._type !== "graphic" // TODO add optional chaining
-      )
-        return toChat("A token must be selected.", {
-          code: 11,
+      try {
+        if (
+          msg.selected.length !== 1 ||
+          msg.selected[0]._type !== "graphic" // TODO add optional chaining
+        )
+          return toChat("A token must be selected.", {
+            code: 11,
+            player: msg.who,
+          });
+        const char = charFromMessage(msg);
+        if (
+          !playerIsGM(msg.playerid) &&
+          !new RegExp("all|" + msg.who, "i").test(char.get("controlledby"))
+        )
+          return toChat("You must control the selected token.", {
+            code: 12,
+            player: msg.who,
+          });
+        if (parts.length === 1) return giveShapeList(msg);
+        if (parts[1] === "end") return endTransform(msg);
+        return wildShape(msg);
+      } catch (error) {
+        return toChat(`AWS transform failed.`, {
+          code: 1,
           player: msg.who,
+          logMsg: `Failed with error: '${error.message}'`,
         });
-      const char = charFromMessage(msg);
-      if (
-        !playerIsGM(msg.playerid) &&
-        !new RegExp("all|" + msg.who, "i").test(char.get("controlledby"))
-      )
-        return toChat("You must control the selected token.", {
-          code: 12,
-          player: msg.who,
-        });
-      // try {
-      if (parts.length === 1) return giveShapeList(msg);
-      if (parts[1] === "end") return endTransform(msg);
-      return wildShape(msg);
-      // } catch (error) {
-      //     return toChat(`AWS transform failed.`, {
-      //         code: 1,
-      //         player: msg.who,
-      //         logMsg: `Failed with error: '${error.message}'`,
-      //     });
-      // }
+      }
     }
 
     /**
@@ -392,7 +397,8 @@ on("ready", function () {
   for each of the skills and saves, use the higher of beast ability + player prof, or just beast skill
   */
   function wildShape(msg) {
-    const { beast, token, druid, pageId } = getTransformDetails(msg);
+    const { beast, token, druid, pageId } = getTransformDetails(msg); // FIXME use page ID from this
+    if (!beast || !token || !druid || !pageId) return;
     if (!(druid instanceof Druid && druid.getCr()))
       return toChat("You must be a druid to use wild shape.", {
         code: 50,
@@ -424,7 +430,7 @@ on("ready", function () {
    * @returns {{beast:Character, token:Graphic, druid:Druid, pageId:string}}
    */
   function getTransformDetails(msg) {
-    const beastId = msg.content.replace("!aws ", "");
+    const beastId = msg.content.replace("!aws transform ", "");
     const beast = getObj("character", beastId);
     if (!beast)
       return toChat(`No beast found with ID "${beastId}".`, {
@@ -854,7 +860,7 @@ on("ready", function () {
       (a, b) =>
         a +
         `{{${cr ? `CR ${b.cr} ` : ""}${b.name}=${
-          transform ? `[✓](!<br>aws ${b.id})` : ""
+          transform ? `[✓](!<br>aws transform ${b.id})` : ""
         }${remove ? `[✗](!<br>aws list remove ${b.name})` : ""}}}`,
       `&{template:default}{{name=${tableName}}}`
     );
