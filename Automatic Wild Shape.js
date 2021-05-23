@@ -1,4 +1,4 @@
-// TODO warn when ws hp is 0 or below
+// TODO allow `!aws end` to supply a character id and add it to the 0 hp listener's button output
 // TODO auto-revert setting
 // TODO integrate Jack of All Trades bonus
 // TODO keep turn order for shape changed creature
@@ -275,6 +275,27 @@ on("ready", function () {
   let msg; // set below, never mutated after setting
 
   /* ---------------------------- ANCHOR Listeners ---------------------------- */
+  on("change:player:_online", (p) => {
+    if (playerIsGM(p.id) && p.get("online")) checkMacros();
+  });
+
+  on("change:attribute", (attr, oldAttr) => {
+    if (attr.get("name") !== "hp" || !attr.get("_characterid")) return;
+    const hp = attr.get("current");
+    if (!hp || isNaN(parseInt(hp)) || +hp > 0) return;
+    const npcType = getAttrByName(attr.get("_characterid"), "npc_type");
+    if (!npcType) return;
+    const isWs = npcType.includes("Wildshape");
+    if (!isWs) return;
+    const char = getObj("character", attr.get("_characterid"));
+    if (!char) return;
+    toChat(
+      `${char.get(
+        "name"
+      )} is at ${hp} hit points.<br>[End Wildshape](&#13;!aws end)`
+    );
+  });
+
   on("chat:message", function (m) {
     msg = m;
     const parts = msg.content.toLowerCase().split(" ");
@@ -387,10 +408,6 @@ on("ready", function () {
         });
       return populateList();
     }
-  });
-
-  on("change:player:_online", (p) => {
-    if (playerIsGM(p.id) && p.get("online")) checkMacros();
   });
 
   /* ---------------------------- ANCHOR Processes ---------------------------- */
