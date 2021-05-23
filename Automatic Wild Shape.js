@@ -272,7 +272,8 @@ on("ready", function () {
   })();
 
   /* --------------------------------- Globals -------------------------------- */
-  let msg; // set below, never mutated after setting
+  let msg; // set in msg listener, never mutated after setting
+  let parts; // set in msg listener, never mutated after setting
 
   /* ---------------------------- ANCHOR Listeners ---------------------------- */
   on("change:player:_online", (p) => {
@@ -298,7 +299,7 @@ on("ready", function () {
 
   on("chat:message", function (m) {
     msg = m;
-    const parts = msg.content.toLowerCase().split(" ");
+    parts = msg.content.toLowerCase().split(" ");
     if (msg.type !== "api" || parts[0] !== "!aws") return;
     if (AWS_notifyGM && !playerIsGM(msg.playerid))
       toChat(`-AWS in use by ${msg.who}-`, { player: "gm" });
