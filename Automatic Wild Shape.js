@@ -1,5 +1,7 @@
+// TODO deal with `aws_override`
 // TODO integrate player expertise option
 // TODO integrate Jack of All Trades bonus
+// TODO LOW PRIORITY enable use for NPCs when GM uses the API.
 
 // Automatic Wild Shape
 on("ready", function () {
@@ -11,9 +13,9 @@ on("ready", function () {
   /* -------------------------------------------------------------------------- */
   const AWS_notifyGM = true; // Notify all GMs whenever the API is used by a player.
 
-  const AWS_hpbar = 3; // The token bar used for hp (can be 1, 2, or 3).
+  const AWS_hpbar = 3; // The token bar used for hp (can be 1 (green bar), 2 (blue bar), or 3 (red bar)).
 
-  const AWS_rollHp = false; // Roll for max beast HP.
+  const AWS_rollHp = false; // Roll for max beast HP. If false, averages will be used.
 
   const AWS_autoRevert = false; // Automatically end wildshape if HP goes below 0.
 
@@ -25,7 +27,10 @@ on("ready", function () {
   const AWS_usePlayerProfBonus = false;
 
   // If a player has expertise in a skill then allow them to make use of it in their wildshapes.
-  const AWS_usePlayerExpertise = false; // TODO not yet integrated
+  const AWS_usePlayerExpertise = true; // TODO not yet integrated
+
+  // If a player has the Jack of All Trades feature, then allow them to use that feature in their wildshapes.
+  const AWS_useJackOfAll = true; // TODO not yet integrated
 
   /* ----------------------------- Options Checks ----------------------------- */
   const options = [
@@ -96,20 +101,20 @@ on("ready", function () {
     getDetails(char) {
       let classIndex = -1;
       let classAttrVal = getAttrByName(char.id, "class");
-      if (classAttrVal.toLowerCase() === "druid") classIndex = 0;
-      // TODO optional chaining should be here
+      if (classAttrVal && classAttrVal.toLowerCase() === "druid")
+        classIndex = 0;
       else {
         for (let i = 1; i <= 4; i++) {
-          if (getAttrByName(char.id, `multiclass${i}_flag`) !== 1) continue;
-          if (
-            getAttrByName(char.id, `multiclass${i}`).toLowerCase() === "druid" // TODO optional chaining should be here
-          ) {
+          const flag = getAttrByName(char.id, `multiclass${i}_flag`);
+          if (!flag || flag === "0") continue;
+          const className = getAttrByName(char.id, `multiclass${i}`);
+          if (className && className.toLowerCase() === "druid") {
             classIndex = i;
             break;
           }
         }
       }
-      if (classIndex === -1) return; // TODO accept NPCs if GM?
+      if (classIndex === -1) return;
       let classAttr;
       let levelAttr;
       let subclassAttr;
@@ -339,7 +344,7 @@ on("ready", function () {
         if (
           !msg.selected ||
           msg.selected.length !== 1 ||
-          msg.selected[0]._type !== "graphic" // TODO add optional chaining
+          msg.selected[0]._type !== "graphic"
         )
           return toChat("A token must be selected.", {
             code: 11,
@@ -489,13 +494,11 @@ on("ready", function () {
    * @returns {Druid|MoonDruid}
    */
   function getDruidFromMessage() {
-    // TODO deal with `aws_override`
-    // TODO convert straight into moon druid when appropriate
     const char = charFromMessage();
     if (!char)
       return toChat("The selected token does not represent a character.", {
         code: 31,
-      }); //TODO accept if GM
+      });
     try {
       var druid = new Druid(char);
     } catch (error) {
@@ -505,10 +508,13 @@ on("ready", function () {
       return toChat("Druids cannot use wildshape until they are 2nd level.", {
         code: 33,
       });
-    if (druid.subclass.trim().toLowerCase() !== "moon")
-      // TODO add optional chaining
+    if (druid.subclass && druid.subclass.trim().toLowerCase() !== "moon")
       return druid;
-    return MoonDruid(druid);
+    try {
+      return MoonDruid(druid);
+    } catch (err) {
+      toChat(err.message, { code: 34 });
+    }
   }
 
   /**
@@ -676,8 +682,8 @@ on("ready", function () {
    */
   function applyPlayerProfs(druid, sheet, profSkills) {
     const profBonus = AWS_usePlayerProfBonus
-      ? +druid.get("pb")
-      : +getNpcProfBonus(sheet); // TODO find a better way to do this
+      ? crStringToNumber(druid.get("pb"))
+      : getNpcProfBonus(sheet);
     if (!profBonus) {
       sheet.remove();
       if (AWS_usePlayerProfBonus)
@@ -704,7 +710,9 @@ on("ready", function () {
     setAttrByName(sheet.id, "npc_saving_flag", "2");
     for (const attr in profSkills) {
       const modName = attr + "_mod";
-      const beastMod = +getAttrByName(sheet.id, modName); // TODO find a better way to do this
+      const beastModString = getAttrByName(sheet.id, modName);
+      if (isNaN(parseInt(beastModString))) continue;
+      const beastMod = parseInt(beastModString);
       for (let s of profSkills[attr]) {
         // acrobatics => npc_acrobatics
         let skillName = "npc_" + s;
@@ -974,7 +982,7 @@ on("ready", function () {
    */
   function getNpcProfBonus(npc) {
     const cr = getAttrByName(npc.id, "npc_challenge");
-    if (!cr) return;
+    if (!cr) return 2;
     return Math.max(Math.ceil(crStringToNumber(cr) / 4) + 1, 2);
   }
 
@@ -1207,7 +1215,7 @@ on("ready", function () {
    */
   function charFromMessage() {
     const token = tokenFromMessage();
-    return charFromToken(token); // TODO add optional chaining
+    return charFromToken(token);
   }
 
   /**
@@ -1234,12 +1242,16 @@ on("ready", function () {
   }
 
   /**
-   * Takes a string number and returns it as a resolved number.
+   * Takes a string number or fraction and returns it as a resolved number.
    * @param {string} str
+   * @returns {number}
    */
   function crStringToNumber(str) {
     if (!str) return 0;
-    if (!str.includes("/")) return +str;
+    if (!str.includes("/")) {
+      if (isNaN(parseInt(str))) return 0;
+      return parseInt(str);
+    }
     return str.split("/").reduce((a, b) => +a / +b);
   }
 
