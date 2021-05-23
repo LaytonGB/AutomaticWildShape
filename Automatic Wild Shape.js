@@ -1,3 +1,4 @@
+// TODO integrate player expertise option
 // TODO integrate Jack of All Trades bonus
 
 // Automatic Wild Shape
