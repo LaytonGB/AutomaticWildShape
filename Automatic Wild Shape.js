@@ -273,8 +273,12 @@ on("ready", function () {
     });
   })();
 
+  /* --------------------------------- Globals -------------------------------- */
+  let msg; // set below, never mutated after setting
+
   /* ---------------------- ANCHOR message interpretation --------------------- */
-  on("chat:message", function (msg) {
+  on("chat:message", function (m) {
+    msg = m;
     const parts = msg.content.toLowerCase().split(" ");
     if (msg.type !== "api" || parts[0] !== "!aws") return;
     if (AWS_notifyGM && !playerIsGM(msg.playerid))
@@ -309,7 +313,7 @@ on("ready", function () {
             code: 11,
             player: msg.who,
           });
-        const char = charFromMessage(msg);
+        const char = charFromMessage();
         if (
           !playerIsGM(msg.playerid) &&
           !new RegExp("all|" + msg.who, "i").test(char.get("controlledby"))
@@ -318,9 +322,9 @@ on("ready", function () {
             code: 12,
             player: msg.who,
           });
-        if (parts.length === 1) return giveShapeList(msg);
-        if (parts[1] === "end") return endTransform(msg);
-        return wildShape(msg);
+        if (parts.length === 1) return giveShapeList();
+        if (parts[1] === "end") return endTransform();
+        return wildShape();
       } catch (error) {
         return toChat(`AWS transform failed.`, {
           code: 1,
@@ -338,8 +342,7 @@ on("ready", function () {
      * !aws list remove => Remove the sheets listed by their ID(s).
      */
     function listOptions() {
-      if (parts.length === 2)
-        return listToChat(msg, { cr: true, remove: true });
+      if (parts.length === 2) return listToChat({ cr: true, remove: true });
 
       if (parts[2] === "add") {
         if (!playerIsGM(msg.playerid))
@@ -353,7 +356,7 @@ on("ready", function () {
             player: msg.who,
           });
         }
-        return listAdd(msg);
+        return listAdd();
       }
 
       if (parts[2] === "remove") {
@@ -362,7 +365,7 @@ on("ready", function () {
             code: 17,
             player: msg.who,
           });
-        return listRemove(msg);
+        return listRemove();
       }
 
       return toChat(
@@ -384,7 +387,7 @@ on("ready", function () {
           code: 18,
           player: msg.who,
         });
-      return populateList(msg);
+      return populateList();
     }
   });
 
@@ -431,11 +434,10 @@ on("ready", function () {
 
   /**
    * Returns a list that is filtered appropriately for the selected druid PC.
-   * @param {ChatEventData} msg
    */
-  function giveShapeList(msg) {
+  function giveShapeList() {
     try {
-      const druid = getDruidFromMessage(msg);
+      const druid = getDruidFromMessage();
       if (!druid.filter) throw new Error("Druid max CR was not present.");
       const beasts = filterBeasts(druid.filter);
       if (beasts.length < 1)
@@ -443,7 +445,7 @@ on("ready", function () {
           `There are no beasts in the wildshape list of CR ${druid.cr} or lower, which is your wildshape CR limit.`,
           { player: msg.who }
         );
-      return listToChat(msg, { beasts, cr: true, transform: true });
+      return listToChat({ beasts, cr: true, transform: true });
     } catch (err) {
       toChat(`Failed to output beast list: "${err.message}".`);
     }
@@ -451,13 +453,12 @@ on("ready", function () {
 
   /**
    * Returns a druid or moondruid instance.
-   * @param {ChatEventData} msg
    * @returns {Druid|MoonDruid}
    */
-  function getDruidFromMessage(msg) {
+  function getDruidFromMessage() {
     // TODO deal with `aws_override`
     // TODO convert straight into moon druid when appropriate
-    const char = charFromMessage(msg);
+    const char = charFromMessage();
     if (!char)
       return toChat("The selected token does not represent a character.", {
         code: 31,
@@ -479,11 +480,12 @@ on("ready", function () {
 
   /**
    * Uses the selected token and its character data with the provided beast id to wildshape the selected character into the beast.
-   * @param {ChatEventData} msg The user's input message in format `!aws transform <beast_id>`.
+   *
+   * The user's input message should be in format `!aws transform <beast_id>`.
    */
-  function wildShape(msg) {
+  function wildShape() {
     try {
-      const { beast, token, druid } = getTransformDetails(msg);
+      const { beast, token, druid } = getTransformDetails();
       if (!(beast && token && druid))
         return toChat("Couldn't get the data required for transformation.", {
           code: 52,
@@ -506,11 +508,11 @@ on("ready", function () {
           { code: 53, player: msg.who }
         );
       const profSkills = getSkillDetails(druid);
-      applyPlayerProfs(msg, druid, sheet, profSkills);
-      setHp(msg, sheet);
-      addExtraAttributes(msg, druid, sheet);
+      applyPlayerProfs(druid, sheet, profSkills);
+      setHp(sheet);
+      addExtraAttributes(druid, sheet);
       const beastSize = getNpcSize(beast.sheet);
-      transformToken(msg, beast.sheet, sheet, {
+      transformToken(beast.sheet, sheet, {
         alterSize: beastSize,
         backupSheet: getObj("character", druid.id),
       });
@@ -521,10 +523,9 @@ on("ready", function () {
 
   /**
    * Returns the details required to transform using wild shape.
-   * @param {ChatEventData} msg
    * @returns {{beast:Beast, token:Graphic, druid:Druid}}
    */
-  function getTransformDetails(msg) {
+  function getTransformDetails() {
     const beastId = msg.content.replace("!aws transform ", "");
     const beastChar = getObj("character", beastId);
     if (!beastChar) throw new Error(`No beast found with ID "${beastId}".`);
@@ -536,8 +537,8 @@ on("ready", function () {
         `Couldn't make a Beast object from beast with id "${beastId}".`
       );
     }
-    const token = tokenFromMessage(msg);
-    const druid = getDruidFromMessage(msg);
+    const token = tokenFromMessage();
+    const druid = getDruidFromMessage();
     return { beast, token, druid };
   }
 
@@ -636,12 +637,11 @@ on("ready", function () {
   /**
    * Calculates the appropriate skill bonuses based on the character and beast
    * proficiencies and applies them to the sheet.
-   * @param {ChatEventData} msg
    * @param {Druid|MoonDruid} druid
    * @param {Character} sheet
    * @param {{strength:string[],dexterity:string[],constitution:string[],intelligence:string[],wisdom:string[],charisma:string[]}} profSkills
    */
-  function applyPlayerProfs(msg, druid, sheet, profSkills) {
+  function applyPlayerProfs(druid, sheet, profSkills) {
     const profBonus = AWS_usePlayerProfBonus
       ? +druid.get("pb")
       : +getNpcProfBonus(sheet); // TODO find a better way to do this
@@ -667,8 +667,8 @@ on("ready", function () {
     }
     // stop if no proficiencies
     if (!Object.values(profSkills).some((attr) => attr.length > 0)) return;
-    setAttrByName(msg, sheet.id, "npc_skills_flag", "2");
-    setAttrByName(msg, sheet.id, "npc_saving_flag", "2");
+    setAttrByName(sheet.id, "npc_skills_flag", "2");
+    setAttrByName(sheet.id, "npc_saving_flag", "2");
     for (const attr in profSkills) {
       const modName = attr + "_mod";
       const beastMod = +getAttrByName(sheet.id, modName); // TODO find a better way to do this
@@ -688,24 +688,23 @@ on("ready", function () {
           skillFlag == 0 ||
           skillBonus === undefined
         ) {
-          setAttrByName(msg, sheet.id, skillName + "_flag", "2");
-          setAttrByName(msg, sheet.id, skillName, beastMod + profBonus);
+          setAttrByName(sheet.id, skillName + "_flag", "2");
+          setAttrByName(sheet.id, skillName, beastMod + profBonus);
           continue;
         }
         const newBonus = beastMod + profBonus;
         if (skillBonus < newBonus)
-          setAttrByName(msg, sheet.id, skillName, newBonus.toString());
+          setAttrByName(sheet.id, skillName, newBonus.toString());
       }
     }
   }
 
   /**
    * Sets the `current` and `max` values of the sheet's HP as per the configuration, either with averages or randomly.
-   * @param {ChatEventData} msg
    * @param {Character} sheet
    */
-  function setHp(msg, sheet) {
-    const hp = getAttrObject(msg, sheet.id, "hp");
+  function setHp(sheet) {
+    const hp = getAttrObject(sheet.id, "hp");
     const form = getAttrByName(sheet.id, "npc_hpformula");
     if (!AWS_rollHp) {
       try {
@@ -771,11 +770,10 @@ on("ready", function () {
    * ws_druid_id
    *
    * Also changes the npc_type from "<size> beast" to "<size> Wildshape".
-   * @param {ChatEventData} msg
    * @param {Druid|MoonDruid} druid
    * @param {Character} sheet
    */
-  function addExtraAttributes(msg, druid, sheet) {
+  function addExtraAttributes(druid, sheet) {
     const extraAttributes = [
       {
         attrName: "ws_druid_id",
@@ -783,26 +781,20 @@ on("ready", function () {
       },
     ];
     extraAttributes.forEach((a) =>
-      createOrSetAttrByName(msg, sheet.id, a.attrName, a.value)
+      createOrSetAttrByName(sheet.id, a.attrName, a.value)
     );
-    const sheetType = getAttrObject(msg, sheet.id, "npc_type");
+    const sheetType = getAttrObject(sheet.id, "npc_type");
     const newValue = sheetType.get("current").replace(/beast/i, "Wildshape");
     sheetType.set("current", newValue);
   }
 
   /**
    * Transforms the selected token into that of the chosen beast.
-   * @param {ChatEventData} msg
    * @param {Character} origin The beast that has a default token.
    * @param {Character} target The sheet to copy the beast's default token.
    * @param {{alterSize:number,backupSheet:Character}}
    */
-  function transformToken(
-    msg,
-    origin,
-    target,
-    { alterSize, backupSheet } = {}
-  ) {
+  function transformToken(origin, target, { alterSize, backupSheet } = {}) {
     origin.get("_defaulttoken", (t) => {
       try {
         if (t === "null") throw new Error("No default token");
@@ -811,7 +803,7 @@ on("ready", function () {
           throw new Error("Default token is not user-uploaded");
         const druidToken = getObj("graphic", msg.selected[0]._id);
         const imgsrc = cleanGraphic(tokenData.imgsrc);
-        const hpAttr = getAttrObject(msg, target.id, "hp");
+        const hpAttr = getAttrObject(target.id, "hp");
         Object.assign(tokenData, {
           represents: target.id,
           width: alterSize,
@@ -842,7 +834,7 @@ on("ready", function () {
               code: 101,
             }
           );
-          return transformToken(msg, backupSheet, target, { alterSize });
+          return transformToken(backupSheet, target, { alterSize });
         }
         toChat(
           `Could not create token - transformation aborted due to this error: "${error.message}".`,
@@ -856,10 +848,9 @@ on("ready", function () {
 
   /**
    * Reverts a token to the druid character it represents using the ws_druid_id attribute.
-   * @param {ChatEventData} msg
    */
-  function endTransform(msg) {
-    const wsToken = tokenFromMessage(msg);
+  function endTransform() {
+    const wsToken = tokenFromMessage();
     const sheet = charFromToken(wsToken);
     const druidId = getAttrByName(sheet.id, "ws_druid_id");
     const char = getObj("character", druidId);
@@ -886,7 +877,7 @@ on("ready", function () {
         if (+oldHp < 0) {
           const hp = +getAttrByName(druidId, "hp");
           const newHp = hp + +oldHp;
-          setAttrByName(msg, druidId, "hp", new String(newHp));
+          setAttrByName(druidId, "hp", new String(newHp));
           toChat(
             `${token.get(
               "name"
@@ -959,10 +950,9 @@ on("ready", function () {
 
   /**
    * Adds the selected token(s) to the list of wildshapes.
-   * @param {ChatEventData} msg
    */
-  function listAdd(msg) {
-    const tokens = tokensFromMessage(msg);
+  function listAdd() {
+    const tokens = tokensFromMessage();
     tokens.forEach((t) => {
       const beastId = t.get("represents");
       createObj("attribute", {
@@ -980,17 +970,17 @@ on("ready", function () {
   }
 
   /**
-   * Removes the seleted token(s) or named beasts from the beast list. */
-  function listRemove(msg) {
-    if (msg.content.split(" ").length > 3) return listRemoveNamed(msg);
-    listRemoveSelected(msg);
+   * Removes the seleted token(s) or named beasts from the beast list.
+   */
+  function listRemove() {
+    if (msg.content.split(" ").length > 3) return listRemoveNamed();
+    listRemoveSelected();
   }
 
   /**
    * Removes the named beast from the beast list.
-   * @param {ChatEventData} msg
    */
-  function listRemoveNamed(msg) {
+  function listRemoveNamed() {
     const name = msg.content.replace("!aws list remove ", "");
     const chars = findObjs({
       _type: "character",
@@ -1023,10 +1013,9 @@ on("ready", function () {
 
   /**
    * Removes the selected token(s) from the beast list.
-   * @param {ChatEventData} msg
    */
-  function listRemoveSelected(msg) {
-    const tokens = tokensFromMessage(msg);
+  function listRemoveSelected() {
+    const tokens = tokensFromMessage();
     const removed = [];
     const missingWs = [];
     const charIds = tokens ? tokens.map((t) => t.get("represents")) : [];
@@ -1063,7 +1052,6 @@ on("ready", function () {
 
   /**
    * Make a table out of the supplied attribute's sheets ready to post to chat.
-   * @param {ChatEventData} msg
    * @param {{beasts:Beast[], cr?:boolean, remove?:boolean, transform?:boolean}} options If `beasts` is not supplied, a list of all beasts is used.
    *
    * If `cr = true` then beast CR will be shown and beasts will be sorted by CR.
@@ -1072,15 +1060,12 @@ on("ready", function () {
    *
    * If `transform = true` then a button will be provided beside each beast that will transform the selected token into that beast when clicked by a player controlling the token.
    */
-  function listToChat(
-    msg,
-    {
-      beasts = getAllShapes(),
-      cr = false,
-      remove = false,
-      transform = false,
-    } = {}
-  ) {
+  function listToChat({
+    beasts = getAllShapes(),
+    cr = false,
+    remove = false,
+    transform = false,
+  } = {}) {
     const tableName = cr ? "Wild Shapes by CR" : "Wild Shapes by Name";
     if (beasts.length === 0)
       return toChat("No beasts in the wildshape list.", {
@@ -1102,7 +1087,7 @@ on("ready", function () {
   /**
    * Populates the wild shape list with Beast type NPCs by adding a "ws" attribute to their character sheets.
    */
-  function populateList(msg) {
+  function populateList() {
     const beasts = findAllBeasts({ includeExisting: false });
     if (beasts.length < 1)
       return toChat("No new beasts detected.", { player: msg.who });
@@ -1141,11 +1126,10 @@ on("ready", function () {
   }
 
   /**
-   * @param {ChatEventData} msg
    * @returns {Character}
    */
-  function charFromMessage(msg) {
-    const token = tokenFromMessage(msg);
+  function charFromMessage() {
+    const token = tokenFromMessage();
     return charFromToken(token); // TODO add optional chaining
   }
 
@@ -1158,19 +1142,17 @@ on("ready", function () {
   }
 
   /**
-   * @param {ChatEventData} msg
    * @returns {Graphic[]}
    */
-  function tokensFromMessage(msg) {
+  function tokensFromMessage() {
     const tokens = msg.selected;
     return tokens && tokens.map((t) => getObj("graphic", t._id));
   }
 
   /**
-   * @param {ChatEventData} msg
    * @returns {Graphic}
    */
-  function tokenFromMessage(msg) {
+  function tokenFromMessage() {
     return getObj("graphic", msg.selected[0]._id);
   }
 
@@ -1186,14 +1168,13 @@ on("ready", function () {
 
   /**
    * Either creates an attribute or sets the value of an existing attribute as required.
-   * @param {ChatEventData} msg
    * @param {string} _characterid
    * @param {string} name Name of the attribute.
    * @param {string} current Value to set the attribute to.
    */
-  function createOrSetAttrByName(msg, _characterid, name, current) {
+  function createOrSetAttrByName(_characterid, name, current) {
     if (getAttrByName(_characterid, name) !== undefined)
-      return setAttrByName(msg, _characterid, name, current);
+      return setAttrByName(_characterid, name, current);
     createObj("attribute", {
       _characterid,
       name,
@@ -1203,24 +1184,22 @@ on("ready", function () {
 
   /**
    * Sets the value of an attribute's `current` property.
-   * @param {ChatEventData} msg
    * @param {string} _characterid
    * @param {string} name
    * @param {string} current
    */
-  function setAttrByName(msg, _characterid, name, current) {
-    const attr = getAttrObject(msg, _characterid, name);
+  function setAttrByName(_characterid, name, current) {
+    const attr = getAttrObject(_characterid, name);
     if (attr) attr.setWithWorker("current", current);
   }
 
   /**
    * Returns an attribute object found by character id and attribute name.
-   * @param {ChatEventData} msg
    * @param {string} _characterid
    * @param {string} name
    * @returns {Attribute}
    */
-  function getAttrObject(msg, _characterid, name) {
+  function getAttrObject(_characterid, name) {
     const attrs = findObjs({
       _type: "attribute",
       _characterid,
@@ -1250,20 +1229,21 @@ on("ready", function () {
 
   /**
    * Output the supplied message to chat, optionally as a whisper and/or as an error which will also log to the console.
-   * @param {string} msg
+   * @param {string} message
    * @param {{code:number, player:string, logMsg:string}} options
    */
   function toChat(
-    msg,
+    message,
     { code = undefined, player = undefined, logMsg = undefined } = {}
   ) {
     const isError = code !== undefined;
     const playerName = player && player.concat(" ").split(" ", 1)[0];
-    if (msg)
+    if (message)
       sendChat(
         isError ? AWS_error : AWS_name,
-        `${playerName ? "/w " + playerName + " " : ""}${"<br>" + msg}`
+        `${playerName ? "/w " + playerName + " " : ""}${"<br>" + message}`
       );
-    if (isError) log(AWS_log + (logMsg || msg) + " Error code " + code + ".");
+    if (isError)
+      log(AWS_log + (logMsg || message) + " Error code " + code + ".");
   }
 });
