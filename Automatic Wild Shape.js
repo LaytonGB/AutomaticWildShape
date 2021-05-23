@@ -219,7 +219,7 @@ on("ready", function () {
   /* ------------------------------- ANCHOR Code ------------------------------ */
   /*  Check each of the AWS public macros, and if they don't exist find the
     first GM and create the macro as that GM. */
-  (function checkMacros() {
+  const checkMacros = (function checkMacros() {
     const onlinePlayers = findObjs({ _type: "player", _online: true });
     const onlineGms = onlinePlayers.filter((p) => playerIsGM(p.id));
     const existantMacros = findObjs({ _type: "macro" });
@@ -273,6 +273,7 @@ on("ready", function () {
         return true; // stop finding GMs once the macro has been created.
       });
     });
+    return checkMacros;
   })();
 
   /* --------------------------------- Globals -------------------------------- */
@@ -831,7 +832,7 @@ on("ready", function () {
   /**
    * Transforms the selected token into that of the chosen beast.
    * @param {Character} origin The beast that has a default token.
-   * @param {Character} target The sheet to copy the beast's default token.
+   * @param {Character} target The sheet copying the beast's default token.
    * @param {{alterSize:number,backupSheet:Character}}
    */
   function transformToken(origin, target, { alterSize, backupSheet } = {}) {
@@ -843,7 +844,7 @@ on("ready", function () {
           throw new Error("Default token is not user-uploaded");
         const druidToken = getObj("graphic", msg.selected[0]._id);
         const imgsrc = cleanGraphic(tokenData.imgsrc);
-        const hpAttr = getAttrObject(target.id, "hp");
+        const hpAttr = getAttrObject(target.id, "hp"); // FIXME errors when using backup sheet
         Object.assign(tokenData, {
           represents: target.id,
           width: alterSize,
@@ -1294,15 +1295,9 @@ on("ready", function () {
       name,
     });
     if (attrs.length === 0)
-      return toChat(`Attribute by name "${name}" could not be found.`, {
-        code: 71,
-        player: msg.who,
-      });
+      throw new Error(`Attribute by name "${name}" could not be found.`);
     if (attrs.length > 1)
-      return toChat(`Multiple attributes found with name "${name}".`, {
-        code: 72,
-        player: msg.who,
-      });
+      throw new Error(`Multiple attributes found with name "${name}".`);
     return attrs[0];
   }
 
