@@ -1,6 +1,5 @@
 // TODO auto-revert setting
 // TODO integrate Jack of All Trades bonus
-// TODO keep turn order for shape changed creature
 
 // Automatic Wild Shape
 on("ready", function () {
@@ -839,6 +838,7 @@ on("ready", function () {
         });
         const newToken = createObj("graphic", tokenData);
         toFront(newToken);
+        maintainTurnOrder(druidToken, newToken);
         toChat(
           `${druidToken.get("name")} transformed into a ${target
             .get("name")
@@ -888,6 +888,7 @@ on("ready", function () {
         imgsrc: cleanGraphic(token.imgsrc),
       });
       const newToken = createObj("graphic", token);
+      maintainTurnOrder(wsToken, newToken);
       const oldHp = getAttrByName(sheet.id, "hp");
       toFront(newToken);
       wsToken.remove();
@@ -906,6 +907,25 @@ on("ready", function () {
         }
       } catch (err) {}
     });
+  }
+
+  /**
+   * If there is currently a turn order, modifies the turn order so that the `newToken` takes the place of the `oldToken`.
+   * @param {Graphic} oldToken
+   * @param {Graphic} newToken
+   */
+  function maintainTurnOrder(oldToken, newToken) {
+    const camp = Campaign();
+    if (camp.get("initiativepage") === false) return;
+    const initRaw = camp.get("turnorder");
+    if (!initRaw) return;
+    const init = JSON.parse(initRaw);
+    init.map((a) => {
+      if (a.id === oldToken.id) a.id = newToken.id;
+      return a;
+    });
+    const initOut = JSON.stringify(init);
+    camp.set("turnorder", initOut);
   }
 
   /**
