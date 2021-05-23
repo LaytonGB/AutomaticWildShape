@@ -1,9 +1,7 @@
-// TODO make msg a global
 // TODO warn when ws hp is 0 or below
 // TODO auto-revert setting
 // TODO integrate Jack of All Trades bonus
 // TODO keep turn order for shape changed creature
-// TODO check macros whenever a GM comes online
 
 // Automatic Wild Shape
 on("ready", function () {
@@ -217,7 +215,7 @@ on("ready", function () {
   /* ------------------------------- ANCHOR Code ------------------------------ */
   /*  Check each of the AWS public macros, and if they don't exist find the
     first GM and create the macro as that GM. */
-  const checkMacros = (function () {
+  (function checkMacros() {
     const onlinePlayers = findObjs({ _type: "player", _online: true });
     const onlineGms = onlinePlayers.filter((p) => playerIsGM(p.id));
     const existantMacros = findObjs({ _type: "macro" });
@@ -276,7 +274,7 @@ on("ready", function () {
   /* --------------------------------- Globals -------------------------------- */
   let msg; // set below, never mutated after setting
 
-  /* ---------------------- ANCHOR message interpretation --------------------- */
+  /* ---------------------------- ANCHOR Listeners ---------------------------- */
   on("chat:message", function (m) {
     msg = m;
     const parts = msg.content.toLowerCase().split(" ");
@@ -391,6 +389,11 @@ on("ready", function () {
     }
   });
 
+  on("change:player:_online", (p) => {
+    if (playerIsGM(p.id) && p.get("online")) checkMacros();
+  });
+
+  /* ---------------------------- ANCHOR Processes ---------------------------- */
   /**
    * Adds an easy to use wildshape button to characters that have druid in any of the class names.
    */
