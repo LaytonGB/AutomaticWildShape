@@ -1,4 +1,3 @@
-// TODO auto-revert setting
 // TODO integrate Jack of All Trades bonus
 
 // Automatic Wild Shape
@@ -14,6 +13,8 @@ on("ready", function () {
   const AWS_hpbar = 3; // The token bar used for hp (can be 1, 2, or 3).
 
   const AWS_rollHp = false; // Roll for max beast HP.
+
+  const AWS_autoRevert = false; // Automatically end wildshape if HP goes below 0.
 
   /*
   When calculating wild shape skill bonuses the rules are a little vague
@@ -287,6 +288,18 @@ on("ready", function () {
     const isWs = npcType.includes("Wildshape");
     if (!isWs) return;
     const char = getObj("character", attr.get("_characterid"));
+    if (AWS_autoRevert) {
+      try {
+        const token = tokenFromCharId(attr.get("_characterid"));
+        return endTransform({ token });
+      } catch (err) {
+        return toChat(
+          `Failed to automatically end wildshape for character with ID "${attr.get(
+            "_characterid"
+          )}". ${err.message}`
+        );
+      }
+    }
     if (!char) return;
     toChat(
       `${char.get(
@@ -868,15 +881,16 @@ on("ready", function () {
 
   /**
    * Reverts a token to the druid character it represents using the ws_druid_id attribute.
+   * @param {{token:Graphic}}
    */
-  function endTransform() {
-    const wsToken = tokenFromMessage();
+  function endTransform({ token } = {}) {
+    const wsToken = token || tokenFromMessage();
     const sheet = charFromToken(wsToken);
     const druidId = getAttrByName(sheet.id, "ws_druid_id");
     const char = getObj("character", druidId);
     if (!char)
       throw new Error(
-        `Character not found for character id "${druidId}". In endTransform.`
+        `Character not found for character id "${druidId}" in endTransform.`
       );
     char.get("_defaulttoken", (t) => {
       const token = JSON.parse(t);
@@ -1163,6 +1177,28 @@ on("ready", function () {
         getAttrByName(c.id, "npc_type").search(/beast/i) !== -1 &&
         (includeExisting || !getAttrByName(c.id, "ws"))
     );
+  }
+
+  /**
+   * Uses the supplied character id to find the token representing that character on the player ribbon page.
+   * @param {string} charId
+   * @returns {Graphic}
+   */
+  function tokenFromCharId(charId) {
+    const tokens = findObjs({
+      _type: "graphic",
+      pageid: Campaign().get("playerpageid"),
+      represents: charId,
+    });
+    if (tokens.length > 1)
+      throw new Error(
+        `tokenFromCharId found more than one token representing character with ID "${charId}".`
+      );
+    if (tokens.length < 1)
+      throw new Error(
+        `tokenFromCharId found no tokens representing character with ID "${charId}".`
+      );
+    return tokens[0];
   }
 
   /**
