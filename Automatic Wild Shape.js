@@ -1,4 +1,3 @@
-// TODO allow `!aws end` to supply a character id and add it to the 0 hp listener's button output
 // TODO auto-revert setting
 // TODO integrate Jack of All Trades bonus
 // TODO keep turn order for shape changed creature
