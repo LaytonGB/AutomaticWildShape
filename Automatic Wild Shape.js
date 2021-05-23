@@ -1,7 +1,6 @@
-// TODO deal with `aws_override`
 // TODO integrate player expertise option
 // TODO integrate Jack of All Trades bonus
-// TODO LOW PRIORITY enable use for NPCs when GM uses the API.
+// TODO LOW PRIORITY enable use for NPCs and non-representative tokens when GM uses the API.
 
 // Automatic Wild Shape
 on("ready", function () {
@@ -140,7 +139,7 @@ on("ready", function () {
         classAttr,
         class: getAttrByName(char.id, classAttr),
         levelAttr,
-        level: +getAttrByName(char.id, levelAttr), // NOTE may cause errors
+        level: +getAttrByName(char.id, levelAttr),
         subclassAttr,
         subclass: getAttrByName(char.id, subclassAttr),
       };
