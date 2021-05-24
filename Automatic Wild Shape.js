@@ -1302,10 +1302,9 @@ on("ready", function () {
       name,
     });
     if (attrs.length < 1) return;
-    if (attrs.length > 1) {
-      attrs.forEach((a) => a.remove());
-    }
-    return attrs;
+    if (attrs.length > 1)
+      for (let i = 1; i < attrs.length; i++) attrs[i].remove();
+    return attrs[0];
   }
 
   /**
