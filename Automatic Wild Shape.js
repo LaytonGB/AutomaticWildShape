@@ -310,7 +310,7 @@ on("ready", function () {
     toChat(
       `${char.get(
         "name"
-      )} is at ${hp} hit points.<br>[End Wildshape](&#13;!aws end)`
+      )} is at ${hp} hit points.<br>[End Wildshape](!<br>aws end)`
     );
   });
 
@@ -713,8 +713,8 @@ on("ready", function () {
     }
     // stop if no proficiencies
     if (!Object.values(profSkills).some((attr) => attr.length > 0)) return;
-    setAttrByName(sheet.id, "npc_skills_flag", "2");
-    setAttrByName(sheet.id, "npc_saving_flag", "2");
+    createOrSetAttrByName(sheet.id, "npc_skills_flag", "2");
+    createOrSetAttrByName(sheet.id, "npc_saving_flag", "2");
     for (const attr in profSkills) {
       const modName = attr + "_mod";
       const beastModString = getAttrByName(sheet.id, modName);
@@ -904,24 +904,25 @@ on("ready", function () {
             "name"
           )} has no default token.`
         );
-      const defToken = JSON.parse(t);
-      Object.assign(defToken, {
+      const defaultToken = JSON.parse(t);
+      Object.assign(defaultToken, {
         pageid: wsToken.get("_pageid"),
         layer: wsToken.get("layer"),
         left: wsToken.get("left"),
         top: wsToken.get("top"),
-        imgsrc: cleanGraphic(defToken.imgsrc),
+        imgsrc: cleanGraphic(defaultToken.imgsrc),
       });
+      // FIXME hp section not working
       const oldHp = getAttrByName(sheet.id, "hp");
       if (+oldHp < 0) {
         const hp = +getAttrByName(druidId, "hp");
         const newHp = hp + +oldHp;
         setAttrByName(druidId, "hp", new String(newHp));
         toChat(
-          `${defToken.name} hit points reduced from ${hp} to ${newHp} due to the damage they took while wildshaped.`
+          `${defaultToken.name} hit points reduced from ${hp} to ${newHp} due to the damage they took while wildshaped.`
         );
       }
-      const newToken = createObj("graphic", defToken);
+      const newToken = createObj("graphic", defaultToken);
       toChat(`${newToken.get("name")} ended their wildshape.`);
       maintainTurnOrder(wsToken, newToken);
       toFront(newToken);
@@ -1262,9 +1263,10 @@ on("ready", function () {
    * @param {string} current Value to set the attribute to.
    */
   function createOrSetAttrByName(_characterid, name, current) {
-    if (getAttrByName(_characterid, name) !== undefined)
+    if (getAttrByName(_characterid, name) !== undefined) {
       return setAttrByName(_characterid, name, current);
-    return createObj("attribute", {
+    }
+    createObj("attribute", {
       _characterid,
       name,
       current,
