@@ -352,6 +352,10 @@ on("ready", function () {
             player: msg.who,
           });
         const char = charFromMessage();
+        if (!char)
+          return toChat(`Could not get character from selected token.`, {
+            code: 7,
+          });
         if (
           !playerIsGM(msg.playerid) &&
           !new RegExp("all|" + msg.who, "i").test(char.get("controlledby"))
@@ -550,8 +554,8 @@ on("ready", function () {
         );
       const profSkills = getSkillDetails(druid);
       applyPlayerProfs(druid, sheet, profSkills);
-      setHp(sheet);
       addExtraAttributes(druid, sheet);
+      setHp(sheet);
       const beastSize = getNpcSize(beast.sheet);
       transformToken(beast.sheet, sheet, {
         alterSize: beastSize,
@@ -818,7 +822,7 @@ on("ready", function () {
     );
     const sheetType = getAttrObject(sheet.id, "npc_type");
     const newValue = sheetType.get("current").replace(/beast/i, "Wildshape");
-    sheetType.set("current", newValue);
+    sheetType.setWithWorker("current", newValue);
   }
 
   /**
@@ -894,13 +898,19 @@ on("ready", function () {
         `Character not found for character id "${druidId}" in endTransform.`
       );
     char.get("_defaulttoken", (t) => {
-      const token = JSON.parse(t);
-      Object.assign(token, {
+      if (!t)
+        return toChat(
+          `Couldn't revert token because ${char.get(
+            "name"
+          )} has no default token.`
+        );
+      const defToken = JSON.parse(t);
+      Object.assign(defToken, {
         pageid: wsToken.get("_pageid"),
         layer: wsToken.get("layer"),
         left: wsToken.get("left"),
         top: wsToken.get("top"),
-        imgsrc: cleanGraphic(token.imgsrc),
+        imgsrc: cleanGraphic(defToken.imgsrc),
       });
       const oldHp = getAttrByName(sheet.id, "hp");
       if (+oldHp < 0) {
@@ -908,12 +918,10 @@ on("ready", function () {
         const newHp = hp + +oldHp;
         setAttrByName(druidId, "hp", new String(newHp));
         toChat(
-          `${token.get(
-            "name"
-          )} hit points reduced from ${hp} to ${newHp} due to the damage they took while wildshaped.`
+          `${defToken.name} hit points reduced from ${hp} to ${newHp} due to the damage they took while wildshaped.`
         );
       }
-      const newToken = createObj("graphic", token);
+      const newToken = createObj("graphic", defToken);
       toChat(`${newToken.get("name")} ended their wildshape.`);
       maintainTurnOrder(wsToken, newToken);
       toFront(newToken);
@@ -1213,6 +1221,7 @@ on("ready", function () {
    * @returns {Character}
    */
   function charFromToken(token) {
+    if (!token) return;
     return getObj("character", token.get("represents"));
   }
 
@@ -1228,8 +1237,7 @@ on("ready", function () {
    * @returns {Graphic}
    */
   function tokenFromMessage() {
-    if (!msg.selected)
-      throw new Error(`Cannot get graphic from message, nothing selected.`);
+    if (!msg.selected) return;
     return getObj("graphic", msg.selected[0]._id);
   }
 
@@ -1256,7 +1264,7 @@ on("ready", function () {
   function createOrSetAttrByName(_characterid, name, current) {
     if (getAttrByName(_characterid, name) !== undefined)
       return setAttrByName(_characterid, name, current);
-    createObj("attribute", {
+    return createObj("attribute", {
       _characterid,
       name,
       current,
