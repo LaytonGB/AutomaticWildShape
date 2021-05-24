@@ -56,7 +56,6 @@ on("ready", function () {
 
   /* -------------------------------- Constants ------------------------------- */
   const AWS_name = "AWS";
-  const AWS_state_name = "AUTOMATICWILDSHAPE";
   const AWS_error = AWS_name + " ERROR";
   const AWS_log = AWS_name + " - ";
 
@@ -748,39 +747,30 @@ on("ready", function () {
    * Sets the `current` and `max` values of the sheet's HP as per the configuration, either with averages or randomly.
    * @param {Character} sheet
    */
+  // FIXME setting HP to 1 only works the first time per API restart
   function setHp(sheet) {
     const hp = getOrCreateAttrObject(sheet.id, "hp");
     const form = getAttrByName(sheet.id, "npc_hpformula");
-    if (AWS_rollHp && !form)
-      toChat(
-        `HP cannot be rolled because the creature does not have a HP formula. Attempting to find average instead.`
-      );
-    try {
-      if (AWS_rollHp) {
-        if (!form) throw new Error();
-        return rollHp();
-      }
-      return setAvgHp();
-    } catch (err1) {
-      toChat(
-        `Failed to ${
-          AWS_rollHp
-            ? "roll HP, attempting to get average instead"
-            : "get average HP"
-        }.`,
-        { code: 110 }
-      );
-      if (!AWS_rollHp) return setHpToOne();
-      try {
-        return setAvgHp();
-      } catch (err2) {
-        toChat(`Failed to get average HP.`);
-        return setHpToOne();
-      }
+    if (AWS_rollHp) {
+      if (form && rollHp()) return;
+      if (setAvgHp())
+        return toChat(
+          `Could not roll for HP! Did the beast have a valid entry in the npc_hpformula attribute?<br>**Average beast HP has been used instead.**`,
+          { code: 60 }
+        );
+    } else {
+      if (setAvgHp()) return;
+      if (form && calcAvgHp()) return;
     }
+    setHpToOne();
+    return toChat(
+      `Could not find any HP attributes! **HP is set to 1 instead.**<br>To fix this, set max hp or npc_hpformula on the beast sheet.`,
+      { code: 61 }
+    );
 
     function setAvgHp() {
-      if (!hp.get("max")) throw new Error();
+      const hpMax = hp.get("max") || "";
+      if (!hpMax) return false;
       hp.setWithWorker("current", hp.get("max"));
       return true;
     }
@@ -790,22 +780,21 @@ on("ready", function () {
       const avg = +die / 2 + 0.5;
       const tot = Math.ceil(+count * avg);
       const resolve = form.replace(`${count}d${die}`, tot);
-      setHpToResolve(resolve);
+      return setHpToResolve(resolve);
     }
     function rollHp() {
-      setHpToResolve(form);
+      return setHpToResolve(form);
     }
     function setHpToOne() {
-      hp.set("current", "1");
-      hp.set("max", "1");
-      toChat(`Could not find any HP attributes, so HP is set to 1 instead.`);
+      hp.setWithWorker({ current: "1", max: "1" });
+      return true;
     }
     function setHpToResolve(formula) {
       sendChat(AWS_name, `/r ${formula}`, (r) => {
         const resolved = r[0] && r[0].content && JSON.parse(r[0].content).total;
-        hp.setWithWorker("current", resolved);
-        hp.setWithWorker("max", resolved);
+        hp.setWithWorker({ current: resolved, max: resolved });
       });
+      return true;
     }
   }
 
@@ -913,25 +902,23 @@ on("ready", function () {
         top: wsToken.get("top"),
         imgsrc: cleanGraphic(token.imgsrc),
       });
-      const newToken = createObj("graphic", token);
-      maintainTurnOrder(wsToken, newToken);
       const oldHp = getAttrByName(sheet.id, "hp");
+      if (+oldHp < 0) {
+        const hp = +getAttrByName(druidId, "hp");
+        const newHp = hp + +oldHp;
+        setAttrByName(druidId, "hp", new String(newHp));
+        toChat(
+          `${token.get(
+            "name"
+          )} hit points reduced from ${hp} to ${newHp} due to the damage they took while wildshaped.`
+        );
+      }
+      const newToken = createObj("graphic", token);
+      toChat(`${newToken.get("name")} ended their wildshape.`);
+      maintainTurnOrder(wsToken, newToken);
       toFront(newToken);
       wsToken.remove();
       sheet.remove();
-      toChat(`${newToken.get("name")} ended their wildshape.`);
-      try {
-        if (+oldHp < 0) {
-          const hp = +getAttrByName(druidId, "hp");
-          const newHp = hp + +oldHp;
-          setAttrByName(druidId, "hp", new String(newHp));
-          toChat(
-            `${token.get(
-              "name"
-            )} hit points reduced from ${hp} to ${newHp} due to the damage they took while wildshaped.`
-          );
-        }
-      } catch (err) {}
     });
   }
 
@@ -1294,21 +1281,12 @@ on("ready", function () {
    * @returns {Attribute}
    */
   function getOrCreateAttrObject(_characterid, name) {
-    try {
-      return getAttrObject(_characterid, name);
-    } catch (err1) {
-      if (err1.name === "RangeError") throw err1;
-      try {
-        return createObj("attribute", {
-          _characterid,
-          name,
-        });
-      } catch (err2) {
-        throw new Error(
-          `Failed to create Attribute Object with errors "${err2.message}" and "${err1.message}".`
-        );
-      }
-    }
+    const attr = getAttrObject(_characterid, name);
+    if (attr) return attr;
+    return createObj("attribute", {
+      _characterid,
+      name,
+    });
   }
 
   /**
@@ -1323,11 +1301,11 @@ on("ready", function () {
       _characterid,
       name,
     });
-    if (attrs.length < 1)
-      throw new Error(`Attribute by name "${name}" could not be found.`);
-    if (attrs.length > 1)
-      throw new RangeError(`Multiple attributes found with name "${name}".`);
-    return attrs[0];
+    if (attrs.length < 1) return;
+    if (attrs.length > 1) {
+      attrs.forEach((a) => a.remove());
+    }
+    return attrs;
   }
 
   /**
