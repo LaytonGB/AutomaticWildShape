@@ -183,6 +183,7 @@ on("ready", function () {
   class MoonDruid extends Druid {
     /**
      * @param {Druid} druid
+     * @returns {MoonDruid}
      */
     constructor(druid) {
       super(druid);
@@ -315,9 +316,10 @@ on("ready", function () {
   });
 
   on("chat:message", function (m) {
+    if (m.type !== "api" || m.content.toLowerCase().split(" ")[0] !== "!aws")
+      return;
     msg = m;
-    parts = msg.content.toLowerCase().split(" ");
-    if (msg.type !== "api" || parts[0] !== "!aws") return;
+    parts = m.content.toLowerCase().split(" ");
     if (AWS_notifyGM && !playerIsGM(msg.playerid))
       toChat(`-AWS in use by ${msg.who}-`, { player: "gm" });
     if (parts.length === 1) return transformOptions();
@@ -495,12 +497,13 @@ on("ready", function () {
    */
   function getDruidFromMessage() {
     const char = charFromMessage();
+    let druid;
     if (!char)
       return toChat("The selected token does not represent a character.", {
         code: 31,
       });
     try {
-      var druid = new Druid(char);
+      druid = new Druid(char);
     } catch (error) {
       return toChat(error.message, { code: 32 });
     }
@@ -511,7 +514,7 @@ on("ready", function () {
     if (druid.subclass && druid.subclass.trim().toLowerCase() !== "moon")
       return druid;
     try {
-      return MoonDruid(druid);
+      return new MoonDruid(druid);
     } catch (err) {
       toChat(err.message, { code: 34 });
     }
@@ -557,6 +560,7 @@ on("ready", function () {
       });
     } catch (err) {
       toChat(`Failed to wildshape! ${err.message}`);
+      log(err.stack);
     }
   }
 
@@ -745,46 +749,40 @@ on("ready", function () {
    * @param {Character} sheet
    */
   function setHp(sheet) {
-    const hp = getAttrObject(sheet.id, "hp");
+    const hp = getOrCreateAttrObject(sheet.id, "hp");
     const form = getAttrByName(sheet.id, "npc_hpformula");
-    if (!AWS_rollHp) {
-      try {
-        if (!setAvgHp()) calcAvgHp();
-        return;
-      } catch (err) {
-        toChat(
-          `Failed to set HP using averages, attempting to roll HP instead.`,
-          { code: 110 }
-        );
-      }
-    }
+    if (AWS_rollHp && !form)
+      toChat(
+        `HP cannot be rolled because the creature does not have a HP formula. Attempting to find average instead.`
+      );
     try {
-      return rollHp();
-    } catch (err) {
+      if (AWS_rollHp) {
+        if (!form) throw new Error();
+        return rollHp();
+      }
+      return setAvgHp();
+    } catch (err1) {
+      toChat(
+        `Failed to ${
+          AWS_rollHp
+            ? "roll HP, attempting to get average instead"
+            : "get average HP"
+        }.`,
+        { code: 110 }
+      );
+      if (!AWS_rollHp) return setHpToOne();
       try {
-        if (!AWS_rollHp) {
-          sheet.remove();
-          throw new Error();
-        }
-        if (setAvgHp())
-          return toChat(
-            `Could not randomize HP, setting HP to average instead.`,
-            {
-              code: 112,
-            }
-          );
-        throw new Error();
-      } catch (err) {
-        throw new Error(`Could not calculate HP, wildshape cancelled.`);
+        return setAvgHp();
+      } catch (err2) {
+        toChat(`Failed to get average HP.`);
+        return setHpToOne();
       }
     }
 
     function setAvgHp() {
-      if (hp.get("max")) {
-        hp.setWithWorker("current", hp.get("max"));
-        return true;
-      }
-      return false;
+      if (!hp.get("max")) throw new Error();
+      hp.setWithWorker("current", hp.get("max"));
+      return true;
     }
     function calcAvgHp() {
       const count = /[0-9]+(?=d)/.exec(form)[0];
@@ -796,6 +794,11 @@ on("ready", function () {
     }
     function rollHp() {
       setHpToResolve(form);
+    }
+    function setHpToOne() {
+      hp.set("current", "1");
+      hp.set("max", "1");
+      toChat(`Could not find any HP attributes, so HP is set to 1 instead.`);
     }
     function setHpToResolve(formula) {
       sendChat(AWS_name, `/r ${formula}`, (r) => {
@@ -842,9 +845,9 @@ on("ready", function () {
         const tokenData = JSON.parse(t);
         if (!tokenData.imgsrc.includes("images"))
           throw new Error("Default token is not user-uploaded");
-        const druidToken = getObj("graphic", msg.selected[0]._id);
+        const druidToken = tokenFromMessage();
         const imgsrc = cleanGraphic(tokenData.imgsrc);
-        const hpAttr = getAttrObject(target.id, "hp"); // FIXME errors when using backup sheet
+        const hpAttr = getOrCreateAttrObject(target.id, "hp");
         Object.assign(tokenData, {
           represents: target.id,
           width: alterSize,
@@ -861,12 +864,11 @@ on("ready", function () {
         const newToken = createObj("graphic", tokenData);
         toFront(newToken);
         maintainTurnOrder(druidToken, newToken);
-        toChat(
-          `${druidToken.get("name")} transformed into a ${target
-            .get("name")
-            .replace(druidToken.get("name"), "")
-            .trim()}!`
-        );
+        const newName = target
+          .get("name")
+          .replace(druidToken.get("name"), "")
+          .trim();
+        toChat(`${druidToken.get("name")} transformed into a ${newName}!`);
         druidToken.remove();
       } catch (error) {
         if (backupSheet) {
@@ -881,7 +883,8 @@ on("ready", function () {
         toChat(
           `Could not create token - transformation aborted due to this error: "${error.message}".`,
           {
-            code: 101,
+            code: 102,
+            logMsg: error.stack,
           }
         );
       }
@@ -1238,6 +1241,8 @@ on("ready", function () {
    * @returns {Graphic}
    */
   function tokenFromMessage() {
+    if (!msg.selected)
+      throw new Error(`Cannot get graphic from message, nothing selected.`);
     return getObj("graphic", msg.selected[0]._id);
   }
 
@@ -1283,6 +1288,30 @@ on("ready", function () {
   }
 
   /**
+   * Attempts to find the attribute by name, else returns a new attribute.
+   * @param {string} _characterid
+   * @param {string} name Name of the attribute.
+   * @returns {Attribute}
+   */
+  function getOrCreateAttrObject(_characterid, name) {
+    try {
+      return getAttrObject(_characterid, name);
+    } catch (err1) {
+      if (err1.name === "RangeError") throw err1;
+      try {
+        return createObj("attribute", {
+          _characterid,
+          name,
+        });
+      } catch (err2) {
+        throw new Error(
+          `Failed to create Attribute Object with errors "${err2.message}" and "${err1.message}".`
+        );
+      }
+    }
+  }
+
+  /**
    * Returns an attribute object found by character id and attribute name.
    * @param {string} _characterid
    * @param {string} name
@@ -1294,10 +1323,10 @@ on("ready", function () {
       _characterid,
       name,
     });
-    if (attrs.length === 0)
+    if (attrs.length < 1)
       throw new Error(`Attribute by name "${name}" could not be found.`);
     if (attrs.length > 1)
-      throw new Error(`Multiple attributes found with name "${name}".`);
+      throw new RangeError(`Multiple attributes found with name "${name}".`);
     return attrs[0];
   }
 
