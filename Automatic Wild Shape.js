@@ -890,7 +890,7 @@ on("ready", function () {
         log("TOUCHING DRUID HP");
         const druidHp = +getAttrByName(druidId, "hp");
         const newHp = druidHp + +wsHp;
-        setTimeout(() => setAttrByName(druidId, "hp", new String(newHp)), 10);
+        setTimeout(() => setAttrByName(druidId, "hp", new String(newHp)), 200);
         toChat(
           `${defaultToken.name} hit points reduced from ${druidHp} to ${newHp} due to the damage they took while wildshaped.`
         );
