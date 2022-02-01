@@ -71,4 +71,6 @@ If a PC is using the "aws_override" attribute the GM will be notified.
 
 -----
 
-Automatic Wild Shape written by Layton - https://github.com/LaytonGB/
+Automatic Wild Shape written by Layton Burchell:
+- https://github.com/LaytonGB/
+- https://gitlab.com/LaytonGB/
